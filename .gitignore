@@ -1,0 +1,35 @@
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de compilación de Cython
+*.c
+
+# Directorios de distribución
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.env
+
+# Archivos de configuración local
+.env.local
+*.local
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos de cobertura de pruebas
+.coverage
+htmlcov/
+.pytest_cache/
