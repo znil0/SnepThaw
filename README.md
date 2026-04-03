@@ -1,4 +1,4 @@
-# HeatCalico
+# SnepThaw
 Un proyecto mediocre y decadente para una materia de Métodos Numéricos :P. Hay mucha complejidad porque soy un masoquista de mierda y obligué a mi equipo a usar la **ecuación del calor** en un miserable vaso de agua UwU.
 
 $$\Large \frac{\partial u}{\partial t} - \alpha \nabla^2 u = 0$$
@@ -6,7 +6,7 @@ $$\Large \frac{\partial u}{\partial t} - \alpha \nabla^2 u = 0$$
 ## Resumen
 Básicamente, las cosas están así: nuestra maestra de Métodos Numéricos nos hizo elegir un proyecto para el semestre donde utilizáramos los métodos numéricos para predecir fenómenos naturales. Nosotros, como tenemos un cierto retraso mental, elegimos "Proyecto 2: Enfriamiento de una bebida caliente" y ahora tenemos que invertir parte del tiempo de nuestras vacaciones trabajando en esta mezcolanza.
 
-> Como yo, `znil0`, soy el único que puede digerir las atrocidades que los físicos han escrito sin desmayarse entre terribles sufrimientos, tendré que arreglarmelas para soportar las ganas de hacerlo todo yo \*inserte aquí león furro llorando\*, porque sino la muela se va a enojar conmigo. Además, tampoco se me puede culpar, llevaba rato queriendo experimentar con Series de Fourier-Bessel, el laplaciano en coordenadas cilíndricas, la ecuación del calor y todo eso. Sé que probablemente todo esto me vaya a explotar en la cara, pero pues me da igual, no creo ni acabar la carrera. Con suerte, los proyectos de los demás equipos serán tan mierdosos que el nuestro brillará con luz propia solo por el esfuerzo que le hemos puesto.
+Vamos a crear un programa que prediga la temperatura del líquido dentro de un vaso, según unas mediciones que tomaremos e ingresaremos al mismo. En la justificación, dentro de la carpeta `docs` se encuentra de manera más detallada el desarrollo matemáticos que seguiremos.
 
 ## Integrantes del equipo
 - La Muela 🦷
@@ -19,25 +19,10 @@ Vamos a crear un programa en Python usando `Flet` (una librería parecida a Swin
 
 Ya de por sí es problemático lidiar con fenómenos físicos porque dependen de muchos factores ambientales. Pero idealmente, usaremos dos planteamientos matemáticos distintos:
 
-### Plan A: Ecuación del Calor
-Con esta ecuación diferencial parcial que parece sencilla a primera vista (pero es peor que un tumor en el qlo) podemos predecir la temperatura de un cuerpo en cada uno de los puntos que lo conforman. La ecuación se plantea de forma genérica como
+### Plan A: Ley de Enfriamiento de Newton
+Con esta ley desabrida y decepcionante podemos predecir la manera en la que la temperatura de un cuerpo decrece al pasar el tiempo, asumiendo que la temperatura en el mismo se distribuya uniformemente sobre el mismo (lo cual suele ser el caso en líquidos muy conductores como el agua). Este es nuestro plan a prueba de errores, diseñado para que mi equipo no repruebe si me muero antes de que pueda terminar el otro planteamiento.
 
-$$\Large \frac{\partial u}{\partial t} - \alpha \nabla^2 u = 0$$
-
-donde la función $u(x_1, x_2, ..., x_n, t)$ representa la temperatura en un punto fijado por las coordenadas $x_n$ (que no necesariamente son cartesianas) y el tiempo $t$. El símbolo $\nabla^2$ representa el operador laplaciano que dependiendo de las coordenadas, se puede volver un verdadero infierno.
-
-$$\Large \nabla^2 u = \frac{\partial^2 u}{\partial r^2} + \frac{1}{r}\frac{\partial u}{\partial r} + \frac{1}{r^2}\frac{\partial^2 u}{\partial \theta^2} + \frac{\partial ^2 u}{\partial z^2}$$
-
-Evidentemente, usar la ecuación del calor en un vaso con agua es como usar las malditas Ecuaciones de Campo de Einstein para calcular la velocidad de un carro, ¿pero a quién no le gusta matar hormigas con cañonazos? Quizás le ponga avena, o algún líquido espeso para que se enfrie de manera desigual y poder decir *"Uy, miren, que inteligentes somos, nuestro programa sabe que el centro está calientito y el exterior ta frio!!"* y así.
-
-En fin, que como los vasos suelen ser cilíndricos, tendremos que usar coordenadas cilíndricas y series de Fourier-Bessel. (Las series de Fourier-Bessel reducen el laplaciano en coordenadas cilíndricas, las funciones de Bessel son como una especie de función especial).
-
-> Aún no tengo el desarrollo completo, pero lo tendré eventualmente. Solo que me acabo de mudar y mientras escribo esto estoy sacando una infinidad de trastos y armatostes de cajas que ni sabía que existían. Tanto así que por cada día que pasa, mi variable $M$ que representa numéricamente mis ganas de morirme aumenta exponencialmente. Les juro que si me tengo que mudar una vez más en lo que queda de este año, voy a regalar todas mis cosas y me voy a tirar de un edificio.
-
-### Plan B: Ley de Enfriamiento de Newton
-Con esta ley desabrida y decepcionante podemos predecir la manera en la que la temperatura de un cuerpo decrece al pasar el tiempo, asumiendo que la temperatura en el mismo se distribuya uniformemente sobre el mismo (lo cual suele ser el caso en líquidos como el agua). Este es nuestro plan B a prueba de errores, diseñado para que mi equipo no repruebe si me muero antes de que pueda terminar el otro planteamiento.
-
-Básicamente es una ecuación diferencial lineal de primer orden
+Básicamente es una ecuación diferencial lineal de primer orden (EDO)
 
 $$\Large \frac{dT(t)}{dt} = -r(T - T_m)$$
 
@@ -47,7 +32,33 @@ $$\Large T(t) = T_m + (T_0 - T_m)e^{-rt}\text{.}$$
 
 Utiliza una cierta constante $r$ que representa el ritmo en el que se pierde calor, pero probablemente podamos estimarla tecleando dos mediciones de temperatura y comparando. *([este](https://es.wikipedia.org/wiki/Ley_del_enfriamiento_de_Newton) es el artículo en Wikipedia)*
 
-## ¿Por qué le pusiste ese nombre?
-Porque sí, todos mis proyectos tienen nombres de animales, y como *la muela* no me dió nombres que me convencieran, y además, *el que yabe* tiene la costumbre de dar nombres que hacen referencia a crímenes de guerra, mejor elegí esa kk de nombre. Échenle la culpa a mi equipo.
+Este método claramente no necesita de ningún método numérico, pues disponemos de la solución particular. Sin embargo, **para cumplir con el requerimento, utilizaremos el método de Euler,** que nos permite aproximar los valores de la solución partiendo de un valor inicial y dando saltos de longitud $h$ mediante la expresión
 
-PD: Si lo cambian, los apuñalo mientras duermen ÒwÓ.
+$$\Large y(t_{n+1}) \approx y(t_n) + hf(t_n, y(t_n))$$
+
+que ya preparada queda como
+
+$$\Large T(t_{n+1}) \approx T(t_n) - hr(T(t_n) - T_m)$$
+
+donde solo tenemos que reemplazar $T_m$, comenzar con los valores iniciales $t_0$, $T(t_0)$ y fijar un salto $h$, para que los siguientes valores $t$ sean $t_{n+1} = t_n + h$. Es decir, si sabemos que en el segundo $t_0 = 1\text{s}$ la temperatura fue de $40\text{°C}$ entonces con un paso $h = 0.5\text{s}$ sabremos la temperatura en el segundo $t_1 = t_0 + 0.5 = 1.5\text{s}$.
+
+Este método también se describe mejor en la justificación matemática.
+
+### Plan B: Ecuación del Calor
+Con esta ecuación diferencial parcial que parece sencilla a primera vista (pero es peor que un tumor en el qlo) podemos predecir la temperatura de un cuerpo **sólido** en cada uno de los puntos que lo conforman. La ecuación se plantea de forma genérica como
+
+$$\Large \frac{\partial u}{\partial t} - \alpha \nabla^2 u = 0$$
+
+donde la función $u(x_1, x_2, ..., x_n, t)$ representa la temperatura en un punto fijado por las coordenadas $x_n$ (que no necesariamente son cartesianas) y el tiempo $t$. El símbolo $\nabla^2$ representa el operador laplaciano que dependiendo de las coordenadas, se puede volver un verdadero infierno.
+
+$$\Large \nabla^2 u = \frac{\partial^2 u}{\partial r^2} + \frac{1}{r}\frac{\partial u}{\partial r} + \frac{1}{r^2}\frac{\partial^2 u}{\partial \theta^2} + \frac{\partial ^2 u}{\partial z^2}$$
+
+Evidentemente, usar la ecuación del calor en un vaso con agua es problemático por varias razones. Primero, la ecuación del calor asume que el objeto es sólido, es decir, que no se mueve. Solo considera el flujo de calor por conducción, ignorando la convección (que es propia de los líquidos con baja viscosidad). ***Por esa razón, este plan solo puede aplicarse en sustancias que sean espesas y que enfrien de forma desigual, como avena o alimentos poco líquidos.***
+
+### Plan C: Ecuaciones de Navier-Stokes
+Este plan es solo si nos queda tiempo. Las [ecuaciones de Navier-Stokes](https://es.wikipedia.org/wiki/Ecuaciones_de_Navier-Stokes) son las ecuaciones que modelan el flujo de calor por convección en un líquido. De conseguir manejarla, podremos simular el enfriamiento de toda clase de líquidos.
+
+Si consigo terminar el desarrollo de la ecuación del calor, continuaremos con esta.
+
+## ¿Por qué le cambiaste el nombre?
+Porque Heat suena como a Celo, y pos me daba cosa. Poco más. Elegí SnepThaw porque Snep es abreviatura de Snow Leopard (jerga furra) y Thaw significa deshielar en inglés, esta vez me aseguré de que no hubieran interpretaciones siniestras del nombre. Ya no quiero poner nombres a nada por el resto de mi vida.

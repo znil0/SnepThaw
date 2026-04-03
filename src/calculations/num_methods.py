@@ -3,7 +3,8 @@
 # y otros.
 
 
-# Aplica el método de Euler a una función f
+
+# MÉTODOS PRINCIPALES
 def euler_method(f, y0, t0, tf, step):
     """
     Método de Euler para una EDO: dy/dt = f(t, y)
