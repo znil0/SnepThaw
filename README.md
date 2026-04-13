@@ -1,12 +1,7 @@
 # SnepThaw
-Un proyecto mediocre y decadente para una materia de Métodos Numéricos :P. Hay mucha complejidad porque soy un masoquista de mierda y obligué a mi equipo a usar la **ecuación del calor** en un miserable vaso de agua UwU.
+Un proyecto para una materia de Métodos Numéricos :P.
 
 $$\Large \frac{\partial u}{\partial t} - \alpha \nabla^2 u = 0$$
-
-## Resumen
-Básicamente, las cosas están así: nuestra maestra de Métodos Numéricos nos hizo elegir un proyecto para el semestre donde utilizáramos los métodos numéricos para predecir fenómenos naturales. Nosotros, como tenemos un cierto retraso mental, elegimos "Proyecto 2: Enfriamiento de una bebida caliente" y ahora tenemos que invertir parte del tiempo de nuestras vacaciones trabajando en esta mezcolanza.
-
-Vamos a crear un programa que prediga la temperatura del líquido dentro de un vaso, según unas mediciones que tomaremos e ingresaremos al mismo. En la justificación, dentro de la carpeta `docs` se encuentra de manera más detallada el desarrollo matemáticos que seguiremos.
 
 ## Integrantes del equipo
 - La Muela 🦷
@@ -20,7 +15,7 @@ Vamos a crear un programa en Python usando `Flet` (una librería parecida a Swin
 Ya de por sí es problemático lidiar con fenómenos físicos porque dependen de muchos factores ambientales. Pero idealmente, usaremos dos planteamientos matemáticos distintos:
 
 ### Plan A: Ley de Enfriamiento de Newton
-Con esta ley desabrida y decepcionante podemos predecir la manera en la que la temperatura de un cuerpo decrece al pasar el tiempo, asumiendo que la temperatura en el mismo se distribuya uniformemente sobre el mismo (lo cual suele ser el caso en líquidos muy conductores como el agua). Este es nuestro plan a prueba de errores, diseñado para que mi equipo no repruebe si me muero antes de que pueda terminar el otro planteamiento.
+Con esta ley podemos predecir la manera en la que la temperatura de un cuerpo decrece al pasar el tiempo, asumiendo que la temperatura en el mismo se distribuya uniformemente sobre el mismo (lo cual suele ser el caso en líquidos muy conductores como el agua). Este es nuestro plan a prueba de errores, diseñado para que mi equipo no repruebe si me muero antes de que pueda terminar el otro planteamiento.
 
 Básicamente es una ecuación diferencial lineal de primer orden (EDO)
 
