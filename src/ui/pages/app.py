@@ -4,6 +4,7 @@
 import flet as ft
 import main_screen as ms
 
+
 def main(page: ft.Page):
     # Configuraciones básicas
     page.title = "Página Principal"
