@@ -4,5 +4,12 @@
 
 from collections import namedtuple
 
-# Tipos de dato
-Medicion = namedtuple('Medicion', ['tiempo', 'temperatura'])
+# General
+
+## TempMeasure: Medición con timestamp (desde el epoch) y temperatura °C
+TempMeasure = namedtuple("TempMeasure", ["timestamp", "temperature"])
+
+## TempPoint: Medición preparada para graficar.
+## Tiempo relativo generado por TimeManager.
+## Temperatura en °C
+TPoint = namedtuple("TPoint", ["rtime", "temperature"])
