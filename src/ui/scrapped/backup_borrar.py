@@ -7,7 +7,7 @@ import flet as ft
 import flet_charts as ftc
 import asyncio
 
-from src.ui.constants.theme_colors import LIGHT_COLORS
+from src.ui.constants.theme_colors import LIGHT_COLORS, BASE_COLORS
 from src.ui.constants.text_styles import TEXT_STYLES
 
 
@@ -32,6 +32,7 @@ section_block_invisible_style: dict = {
     "expand": True,
     "padding": 0,
     "bgcolor": ft.Colors.TRANSPARENT,
+    "animate": ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
 }
 
 
@@ -45,6 +46,7 @@ section_block_style: dict = {
         bottom_left=20,  # esquina inferior izquierda redondeada
         bottom_right=20,  # esquina inferior derecha redondeada
     ),
+    "animate": ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
 }
 
 
@@ -79,6 +81,7 @@ footer_block_style: dict = {
         bottom_left=0,
         bottom_right=0,
     ),
+    "margin": ft.Margin(0, 40, 0, 0),
 }
 
 
@@ -159,6 +162,64 @@ class TitleBlock(ft.Container):
                 main_content,
             ],
         )
+
+
+# TÍTULO DE SECCIÓN ____________________________________________________________
+# Contiene el título de la sección y permite colapsar (ocultar) el contenido de
+# la misma mediante el chevron que tiene al inicio.
+
+
+class SectionTitle(ft.Container):
+    def __init__(self, section_label: str, block: ft.Container):
+        super().__init__()
+
+        self.section_label = section_label.upper()
+
+        self.label = ft.Text(
+            self.section_label,
+            **TEXT_STYLES["section_title_style"],
+        )
+
+        self.chevron = ft.IconButton(
+            icon=ft.Icon(**TEXT_STYLES["section_divider_icon_style"]),
+            animate_rotation=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
+            rotate=3.14159,
+            on_click=self.toggle_visibility,
+        )
+        self.block = block
+        self.contracted = False
+
+        self.content = ft.Row(
+            expand=True,
+            controls=[
+                self.chevron,
+                self.label,
+                ft.Divider(**TEXT_STYLES["section_divider_style"]),
+            ],
+            # margin=ft.Margin(0, 20, 0, 0),
+        )
+
+    async def toggle_visibility(self, e):
+        c = self.block
+
+        self.contracted = not self.contracted
+
+        self.page.update()
+
+        # Girar Chevron: 0° -> 90°
+        self.chevron.rotate = 3.14159 / 2 if self.contracted else 3.14159
+
+        # Cambiar altura: 100px -> 0px
+        c.height = 0 if self.contracted else self.block.content_height
+
+        self.page.update()
+
+        # Ocultar el contenido cuando está contraído
+        if self.contracted:
+            await asyncio.sleep(0.5)  # 500 ms
+        c.content.visible = not self.contracted
+
+        self.page.update()
 
 
 # BLOQUE DE MEDICIONES (Y SUS SUB-BLOQUES) _____________________________________
@@ -336,16 +397,16 @@ class MeasuresBlock(ft.Container):
     def __init__(self):
         super().__init__(**section_block_invisible_style)
 
+        self.content_height = 260
+        self.height = self.content_height
+
         self.content = ft.Row(
             controls=[
                 MeasuresBlock_Measures(),
                 MeasuresBlock_TimeNow(),
                 MeasuresBlock_Table(),
             ],
-            height=260,
-            ## Me rindo. No consigo que los hijos se expandan hacia arriba. La subsección
-            ## MeasuresBlock_Measures siempre queda menos alta que la tabla...
-            ## Te odio, Flet.
+            height=self.content_height,
             expand=True,
         )
 
@@ -400,10 +461,10 @@ class GAVChart(ftc.LineChart):
 
         self.data_series = [self.line_1, self.line_2]
 
-    def update_axis_limits(self, line: int):
-        if self.points_1 and line == 1:
-            x_values = [point.x for point in self.points]
-            y_values = [point.y for point in self.points]
+    def update_axis_limits(self):
+        if self.points_1:
+            x_values = [point.x for point in self.points_1]
+            y_values = [point.y for point in self.points_1]
 
             self.min_x = min(x_values)
             self.max_x = max(x_values)
@@ -415,19 +476,47 @@ class GAVChart(ftc.LineChart):
             max_y = max(y_values)
             self.left_axis.max = max_y + (max_y * 0.1)  # Añadir 10% de margen
 
-    def create_data_points(self, x, y):
-        self.points.append(
-            ftc.LineChartDataPoint(
-                x,
-                y,
-                selected_below_line=ftc.ChartPointLine(
-                    width=0.5, color="white54", dash_pattern=[2, 4]
-                ),
-                selected_point=ftc.ChartCirclePoint(stroke_width=1),
-            ),
-        )
+        if self.points_2:
+            x_values = [point.x for point in self.points_2]
+            y_values = [point.y for point in self.points_2]
 
-        self.line.data_points = self.points.copy()
+            self.min_x = min(x_values)
+            self.max_x = max(x_values)
+
+            # Configurar límites del eje X
+            self.bottom_axis.interval = max(1, (self.max_x - self.min_x) // 10)
+
+            # Configurar límites del eje Y
+            max_y = max(y_values)
+            self.left_axis.max = max_y + (max_y * 0.1)  # Añadir 10% de margen
+
+    def create_data_points(self, x, y, line: int):
+        if line == 1:
+            self.points_1.append(
+                ftc.LineChartDataPoint(
+                    x,
+                    y,
+                    selected_below_line=ftc.ChartPointLine(
+                        width=0.5, color="white54", dash_pattern=[2, 4]
+                    ),
+                    selected_point=ftc.ChartCirclePoint(stroke_width=1),
+                ),
+            )
+
+            self.line_1.data_points = self.points_1.copy()
+        if line == 2:
+            self.points_2.append(
+                ftc.LineChartDataPoint(
+                    x,
+                    y,
+                    selected_below_line=ftc.ChartPointLine(
+                        width=0.5, color="white54", dash_pattern=[2, 4]
+                    ),
+                    selected_point=ftc.ChartCirclePoint(stroke_width=1),
+                ),
+            )
+
+            self.line_2.data_points = self.points_2.copy()
         self.update_axis_limits()
         self.update()
 
@@ -436,6 +525,10 @@ class GraphAndValuesBlock_Graph(ft.Container):
     def __init__(self):
         super().__init__(**section_block_style)
         self.expand = 3
+
+        self.graph = GAVChart(BASE_COLORS["color_3"], BASE_COLORS["color_4"])
+
+        self.content = self.graph
 
 
 class GraphAndValuesBlock_Predicted(ft.Container):
@@ -514,17 +607,15 @@ class GraphAndValuesBlock(ft.Container):
     def __init__(self):
         super().__init__(**section_block_invisible_style)
 
-        self.content = ft.Column(
+        self.content_height = 450
+        self.height = self.content_height
+
+        self.content = ft.Row(
             controls=[
-                ft.Row(
-                    controls=[
-                        GraphAndValuesBlock_Graph(),
-                        GraphAndValuesBlock_Predicted(),
-                    ],
-                    height=450,
-                    expand=True,
-                )
+                GraphAndValuesBlock_Graph(),
+                GraphAndValuesBlock_Predicted(),
             ],
+            height=self.content_height,
             expand=True,
         )
 
@@ -537,6 +628,9 @@ class GraphAndValuesBlock(ft.Container):
 class DebugBlock(ft.Container):
     def __init__(self):
         super().__init__(**section_block_style)
+
+        self.content_height = 100
+        self.height = self.content_height
 
         self.chk_show_relative_time_field = ft.Checkbox(
             ft.Text(
@@ -581,30 +675,6 @@ class MoreInfoBlock(ft.Container):
         )
 
 
-class SectionTitle(ft.Container):
-    def __init__(self, section_label: str):
-        super().__init__()
-
-        self.section_label = section_label.upper()
-
-        self.label = ft.Text(
-            self.section_label,
-            **TEXT_STYLES["section_title_style"],
-        )
-
-        self.content = ft.Row(
-            expand=True,
-            controls=[
-                ft.Icon(**TEXT_STYLES["section_divider_icon_style"]),
-                # ft.Container(width=20),
-                self.label,
-                ft.Divider(**TEXT_STYLES["section_divider_style"]),
-                # ft.Container(width=20),
-            ],
-            margin=ft.Margin(0, 20, 0, 0),
-        )
-
-
 # VIEW PRINCIPAL _______________________________________________________________
 # Este es el lugar donde toda la página se ensambla. Debido a limitaciones del
 # propio flet, la verdadera Page se encuentra en el módulo `main.py`. Este view
@@ -618,18 +688,22 @@ def view(page: ft.Page):
     # Todos los componentes de la página se colocan dentro de una columna
     # envuelta en un container que restringe su tamaño al 80% horizontal.
 
+    block_1 = MeasuresBlock()
+    block_2 = GraphAndValuesBlock()
+    block_3 = DebugBlock()
+    block_4 = MoreInfoBlock(page)
+
     central_column = ft.Container(
         content=ft.Column(
             controls=[
                 TitleBlock(),
-                SectionTitle("Mediciones de Temperatura"),
-                MeasuresBlock(),
-                SectionTitle("Gráficas y Valores Calculados"),
-                GraphAndValuesBlock(),
-                SectionTitle("Debug"),
-                DebugBlock(),
-                SectionTitle("Más información"),
-                MoreInfoBlock(page),
+                SectionTitle("Mediciones de Temperatura", block_1),
+                block_1,
+                SectionTitle("Gráficas y Valores Calculados", block_2),
+                block_2,
+                SectionTitle("Debug", block_3),
+                block_3,
+                block_4,
             ],
             spacing=15,
             alignment=ft.MainAxisAlignment.CENTER,
