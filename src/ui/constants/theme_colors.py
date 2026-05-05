@@ -17,8 +17,9 @@ BASE_COLORS = {
 LIGHT_COLORS = {
     "text": "#06001a",  # color_1 darkened
     "background": "#fff7f2",  # otro, "#ffeee6",
+    "background_2": "#FEE4D8",
     "primary": "#EB3678",
-    "secondary": "#FB773C",
+    "secondary": "#F59BBC",
     "accent": "#180161",
 }
 

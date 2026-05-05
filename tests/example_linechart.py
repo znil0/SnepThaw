@@ -8,31 +8,31 @@ import time
 
 import flet as ft
 import flet_charts as ftc
-import locale # Se usa para darle formato a números
+import locale  # Se usa para darle formato a números
 
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
 
 
-
-base_chart_style: dict = { # Estilo del gráfico de linea base
+base_chart_style: dict = {  # Estilo del gráfico de linea base
     "expand": True,
-    "tooltip": ftc.BarChartTooltip(bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.WHITE)),
+    "tooltip": ftc.BarChartTooltip(
+        bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.WHITE)
+    ),
     "left_axis": ftc.ChartAxis(label_size=50),
     "bottom_axis": ftc.ChartAxis(label_spacing=1, title_size=40),
     "horizontal_grid_lines": ftc.ChartGridLines(
-        interval=10,
-        color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE),
-        width=1
+        interval=10, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE), width=1
     ),
     "bgcolor": ft.Colors.TRANSPARENT,
 }
+
 
 class BaseChart(ftc.LineChart):
     def __init__(self, line_color: str):
         super().__init__(**base_chart_style)
 
         # Crear lista vacía para guardar coordenadas
-        self.points:list = []
+        self.points: list = []
 
         # Fijar el mínimo y máximo del eje X
         self.min_x = None
@@ -40,7 +40,7 @@ class BaseChart(ftc.LineChart):
 
         # Esta es la línea principal que se muestra en el UI
         self.line = ftc.LineChartData(
-            color= line_color, #rojo para OUT y verde para IN
+            color=line_color,  # rojo para OUT y verde para IN
             stroke_width=2,
             curved=True,
             rounded_stroke_cap=True,
@@ -53,7 +53,7 @@ class BaseChart(ftc.LineChart):
                     "transparent",
                 ],
             ),
-            points = self.points
+            points=self.points,
         )
 
         self.data_series = [self.line]
@@ -62,35 +62,34 @@ class BaseChart(ftc.LineChart):
         if self.points:
             x_values = [point.x for point in self.points]
             y_values = [point.y for point in self.points]
-            
+
             self.min_x = min(x_values)
             self.max_x = max(x_values)
-            
+
             # Configurar límites del eje X
             self.bottom_axis.interval = max(1, (self.max_x - self.min_x) // 10)
-            
+
             # Configurar límites del eje Y
             max_y = max(y_values)
-            self.left_axis.max = max_y + (max_y * 0.1)  # Añadir 10% de margen    
-
+            self.left_axis.max = max_y + (max_y * 0.1)  # Añadir 10% de margen
 
     # Crear método que pone la info del Tracker a los graficos
     def create_data_points(self, x, y):
         self.points.append(
             ftc.LineChartDataPoint(
-                x, y,
+                x,
+                y,
                 selected_below_line=ftc.ChartPointLine(
-                    width=0.5,
-                    color="white54",
-                    dash_pattern=[2, 4]
+                    width=0.5, color="white54", dash_pattern=[2, 4]
                 ),
                 selected_point=ftc.ChartCirclePoint(stroke_width=1),
             ),
         )
-        
+
         self.line.data_points = self.points.copy()
         self.update_axis_limits()
         self.update()
+
 
 in_style: dict = {
     "expand": 1,
@@ -99,11 +98,13 @@ in_style: dict = {
     "padding": 30,
 }
 
+
 class GraphIn(ft.Container):
     def __init__(self):
         super().__init__(**in_style)
         self.chart = BaseChart(line_color="teal600")
         self.content = self.chart
+
 
 out_style: dict = {
     "expand": 1,
@@ -111,6 +112,7 @@ out_style: dict = {
     "border_radius": 10,
     "padding": 30,
 }
+
 
 class GraphOut(ft.Container):
     def __init__(self):
@@ -129,7 +131,7 @@ tracker_style: dict = {
         "size": 48,
         "weight": "bold",
     },
-    "input": { # Estilo para cuadros de texto
+    "input": {  # Estilo para cuadros de texto
         "width": 220,
         "height": 40,
         "border_color": "white12",
@@ -138,31 +140,30 @@ tracker_style: dict = {
         "content_padding": 10,
         "text_align": "center",
     },
-    "add": { # Estilo para botón añadir
+    "add": {  # Estilo para botón añadir
         "icon": ft.Icons.ADD,
         "bgcolor": "#1f2128",
         "icon_size": 16,
         "icon_color": "teal600",
         "scale": ft.Scale(0.8),
     },
-    "subtract": { # Estilo para botón sustraer
+    "subtract": {  # Estilo para botón sustraer
         "icon": ft.Icons.REMOVE,
         "bgcolor": "#1f2128",
         "icon_size": 16,
         "icon_color": "red600",
         "scale": ft.Scale(0.8),
     },
-    "data_table": { # Estilo para tabla de datos
-        "columns": [ # Titulos de las columnas
+    "data_table": {  # Estilo para tabla de datos
+        "columns": [  # Titulos de las columnas
             ft.DataColumn(ft.Text("Timestamp", weight="w900")),
-            ft.DataColumn(ft.Text("Amount", weight="w900"),
-                          numeric=True),
+            ft.DataColumn(ft.Text("Amount", weight="w900"), numeric=True),
         ],
         "width": 380,
         "heading_row_height": 35,
         "data_row_max_height": 40,
     },
-    "data_table_container": { # Estilo para el contenedor de la tabla
+    "data_table_container": {  # Estilo para el contenedor de la tabla
         "expand": True,
         "width": 450,
         "padding": 10,
@@ -171,11 +172,12 @@ tracker_style: dict = {
             spread_radius=8,
             blur_radius=15,
             color=ft.Colors.with_opacity(0.15, "black"),
-            offset=ft.Offset(4,4),
+            offset=ft.Offset(4, 4),
         ),
         "bgcolor": ft.Colors.with_opacity(0.75, "#1f2128"),
     },
 }
+
 
 class Tracker(ft.Container):
     def __init__(self, _in: object, _out: object):
@@ -185,36 +187,35 @@ class Tracker(ft.Container):
 
         self.counter = 0
         self.balance = ft.Text(
-            locale.currency(self.counter, grouping=True),
-            **tracker_style.get("balance")
+            locale.currency(self.counter, grouping=True), **tracker_style.get("balance")
         )
 
         self.input = ft.TextField(**tracker_style.get("input"))
         self.add = ft.IconButton(
             **tracker_style.get("add"),
             data=True,
-            on_click = lambda e: self.update_balance(e)
+            on_click=lambda e: self.update_balance(e),
         )
         self.subtract = ft.IconButton(
             **tracker_style.get("subtract"),
             data=False,
-            on_click = lambda e: self.update_balance(e),
+            on_click=lambda e: self.update_balance(e),
         )
 
         self.table = ft.DataTable(**tracker_style.get("data_table"))
 
         self.content = ft.Column(
-            horizontal_alignment = "center",
-            controls = [
-                ft.Divider(height = 15, color = "transparent"),
-                ft.Text("Totla Balance", size = 11, weight = "w900"),
-                ft.Row(alignment = "center", controls=[self.balance]),
-                ft.Divider(height = 15, color = "transparent"),
+            horizontal_alignment="center",
+            controls=[
+                ft.Divider(height=15, color="transparent"),
+                ft.Text("Totla Balance", size=11, weight="w900"),
+                ft.Row(alignment="center", controls=[self.balance]),
+                ft.Divider(height=15, color="transparent"),
                 ft.Row(
-                    alignment="center", 
+                    alignment="center",
                     controls=[
-                        self.subtract, 
-                        self.input, 
+                        self.subtract,
+                        self.input,
                         self.add,
                     ],
                 ),
@@ -225,8 +226,8 @@ class Tracker(ft.Container):
                         expand=True,
                         scroll="hidden",
                         controls=[self.table],
-                    )
-                )
+                    ),
+                ),
             ],
         )
 
@@ -276,19 +277,13 @@ class Tracker(ft.Container):
                 self.counter -= delta
                 self.update_data_table(delta, sign=False)
                 # cambio de _in a _out
-                self._out.chart.create_data_points(
-                    x=self.x,
-                    y=delta
-                )
+                self._out.chart.create_data_points(x=self.x, y=delta)
                 self.x += 1
-            
+
             # 4. Actualizar UI
-            self.balance.value = locale.currency(
-                self.counter,
-                grouping=True
-            )
+            self.balance.value = locale.currency(self.counter, grouping=True)
             self.balance.update()
-            self.input.value="" #Limpiar espacios
+            self.input.value = ""  # Limpiar espacios
             self.input.update()
 
 
@@ -302,21 +297,19 @@ def main(page: ft.Page):
 
     page.add(
         ft.Row(
-            expand = True,
-            controls = [
+            expand=True,
+            controls=[
                 tracker,
                 ft.Column(
-                    expand = True,
-                    controls = [
-                        graph_in,
-                        graph_out
-                    ],
+                    expand=True,
+                    controls=[graph_in, graph_out],
                 ),
             ],
         )
     )
 
     page.update()
+
 
 if __name__ == "__main__":
     ft.app(target=main)
