@@ -9,11 +9,17 @@
 
 import time
 import datetime as dt
+import threading
+from typing import Callable
 from src.calculations.data_types import TempMeasure, TPoint
 
 
 class TimeManager:
-    def __init__(self, interval_exp: float):
+    def __init__(
+        self,
+        interval_exp: float,
+        runnable: Callable = lambda: print("<Time Manager> Runnable Tick Not Defined!"),
+    ):
         """Al instanciar `TimeManager`, se define la hora de instanciado como
         el segundo `0`. Y los tiempos relativos son los segundos después del
         mismo.
@@ -23,7 +29,11 @@ class TimeManager:
         que todos los tiempos se expresen en términos de `0.125` segundos
         (`12.25`, `12.375`, `12.5` pero nunca `12.41`)."""
 
+        self.runnable = runnable
         self.interval = 1 / (2**interval_exp)
+        self.start_time = self.round_to_interval(time.time())
+
+    def reset_start_time(self):
         self.start_time = self.round_to_interval(time.time())
 
     def round_to_interval(self, value: float):
@@ -31,9 +41,12 @@ class TimeManager:
         return round(value / self.interval) * self.interval
 
     def get_time(self):
+        """Obtiene el tiempo en segundos desde el Epoch, redondeado al múltiplico
+        más cercano."""
         return self.round_to_interval(time.time())
 
     def get_relative_time(self, timestamp: float = None):
+        """Obtiene el tiempo relativo en segundos desde su propio `start_time`."""
         if timestamp is None:
             timestamp = time.time()
         return self.round_to_interval(timestamp - self.start_time)
@@ -45,17 +58,20 @@ class TimeManager:
         a un timestamp."""
         return self.start_time + relative_time
 
-    def format_relative_time(self, relative_time: float):
+    def format_relative_time(self, relative_time: float, added_hours: int = 0):
         """Aplica formato a un tiempo relativo: Si `start_time` es a las `12:45:01`
         y el `relative_time=6` retorna `12:45:07`, sin contar días."""
         td = dt.timedelta(seconds=self.relative_time_to_timestamp(relative_time))
-        return self.format_timedelta_hms(td)
+        return self.format_timedelta_hms(td, added_hours)
 
-    def format_timedelta_hms(self, td):
+    def format_timedelta_hms(self, td: dt.timedelta, added_hours: int = 0):
         """
         Convierte `timedelta` a string `HH:MM:SS` (ignora los días).
         """
         total_seconds = int(td.total_seconds())
+
+        total_seconds += added_hours * 3600  # Adelanto de horas.
+
         hours = (total_seconds // 3600) % 24  # Solo horas dentro del día
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
@@ -65,6 +81,18 @@ class TimeManager:
         rtime = self.get_relative_time(time_measure.timestamp)
         temperature = time_measure.temperature
         return TPoint(rtime, temperature)
+
+    def set_runnable_tick(self, runnable: Callable):
+        self.runnable = runnable
+
+    def _loop(self):
+        while True:
+            self.runnable()
+            time.sleep(self.interval)
+
+    def start_runnable(self):
+        self.hilo = threading.Thread(target=self._loop, daemon=True)
+        self.hilo.start()
 
     # FUNCIONES PARA DEBUGGING
     def print_values(self):

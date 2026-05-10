@@ -10,6 +10,10 @@ import asyncio
 from src.ui.constants.theme_colors import LIGHT_COLORS, BASE_COLORS
 from src.ui.constants.text_styles import TEXT_STYLES
 
+from src.calculations.time_manager import TimeManager
+from src.calculations.data_types import TempMeasure
+from src.calculations.newton_cooling_law import NewtonCoolingLaw
+
 
 # ESTILOS DE COMPONENTES _______________________________________________________
 # Contiene las configuraciones de fuentes, layout, colores y otros relacionados
@@ -24,6 +28,12 @@ title_block_style: dict = {
         top_right=0,
         bottom_left=20,
         bottom_right=20,
+    ),
+    "shadow": ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=3,
+        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+        offset=ft.Offset(2, 4),  # Desplazamiento en x, y
     ),
 }
 
@@ -45,6 +55,12 @@ section_block_style: dict = {
         top_right=20,  # esquina superior derecha sin redondear
         bottom_left=20,  # esquina inferior izquierda redondeada
         bottom_right=20,  # esquina inferior derecha redondeada
+    ),
+    "shadow": ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=3,
+        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+        offset=ft.Offset(2, 4),  # Desplazamiento en x, y
     ),
     "animate": ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
 }
@@ -82,6 +98,12 @@ footer_block_style: dict = {
         bottom_right=0,
     ),
     "margin": ft.Margin(0, 40, 0, 0),
+    "shadow": ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=3,
+        color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+        offset=ft.Offset(2, 4),  # Desplazamiento en x, y
+    ),
 }
 
 
@@ -230,9 +252,10 @@ class SectionTitle(ft.Container):
 class MeasuresBlock_Measures(ft.Container):
     def __init__(self):
         super().__init__(**section_block_style)
-        self.expand = 2
 
-        time_measure_field = ft.TextField(
+        self.expand = 1
+
+        self.time_measure_field = ft.TextField(
             label="Tiempo Relativo (s)",
             label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
             width=float("inf"),
@@ -241,7 +264,7 @@ class MeasuresBlock_Measures(ft.Container):
             text_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_style"]),
         )
 
-        temperature_measure_field = ft.TextField(
+        self.temperature_measure_field = ft.TextField(
             label="Temperatura (°C)",
             label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
             width=float("inf"),
@@ -259,24 +282,54 @@ class MeasuresBlock_Measures(ft.Container):
                     **TEXT_STYLES["submit_button_text_style"],
                 ),
             ),
+            on_click=self.set_measure,
         )
 
         self.content = ft.Column(
             controls=[
                 ft.Text("Añadir medición", **TEXT_STYLES["title_3_style"]),
                 ft.Container(height=10),
-                time_measure_field,
-                temperature_measure_field,
+                self.time_measure_field,
+                self.temperature_measure_field,
                 submit_button,
             ],
             expand=True,
         )
 
+    def set_mb_table(self, mb_table: ft.Container):
+        self.mb_table = mb_table
+
+    def set_measure(self):
+
+        # Obtener tiempo relativo
+        if self.time_measure_field.visible:
+            rtime = float(self.time_measure_field.value)
+        else:
+            rtime = time_manager.get_relative_time()
+        rtime = time_manager.round_to_interval(rtime)
+        self.time_measure_field.value = ""
+
+        # Obtener temperatura
+        temp = float(self.temperature_measure_field.value)
+        self.temperature_measure_field.value = ""
+
+        # Ensamblar TempMeasure y mostrarlo en tabla
+        temp_measure = TempMeasure(time_manager.relative_time_to_timestamp(rtime), temp)
+        print(  # Debug
+            "<MeasuresBlock: Measures> CREATED MEASURE: ",
+            f"\n\ttemp_measure.timestamp -> {temp_measure.timestamp}",
+            f"\n\ttemp_measure.temperature -> {temp_measure.temperature}",
+        )
+
+        self.mb_table.insert_temp_measure(temp_measure)
+
+        # TODO: Send temp_measure to NCL
+
 
 class MeasuresBlock_TimeNow(ft.Container):
     def __init__(self):
         super().__init__(**section_block_invisible_style)
-        self.expand = 2
+        self.expand = 1
 
         self.time_text = ft.Text(
             "14:16:23",
@@ -286,6 +339,11 @@ class MeasuresBlock_TimeNow(ft.Container):
         self.rtime_text = ft.Text(
             "12 sec",
             **TEXT_STYLES["big_value_2_style"],
+        )
+
+        self.rtime_since_text = ft.Text(
+            "desde las 4:10:34",
+            **TEXT_STYLES["small_note_style"],
         )
 
         self.content = ft.Column(
@@ -311,10 +369,7 @@ class MeasuresBlock_TimeNow(ft.Container):
                         controls=[
                             ft.Text("Tiempo Relativo", **TEXT_STYLES["title_3_style"]),
                             self.rtime_text,
-                            ft.Text(
-                                "desde las 4:10:34",
-                                **TEXT_STYLES["small_note_style"],
-                            ),
+                            self.rtime_since_text,
                         ],
                         expand=True,
                         spacing=0,
@@ -330,18 +385,22 @@ class MeasuresBlock_TimeNow(ft.Container):
 class MeasuresBlock_Table(ft.Container):
     def __init__(self):
         super().__init__(**section_block_style)
-        self.expand = 4
+        self.expand = 2
 
+        self.placeholder_deleted = False
         self.table_values = [  # Placeholder
-            {"tiempo_real": "1:30:45", "tiempo_relativo": 34, "temperatura": 23},
-            {"tiempo_real": "1:36:23", "tiempo_relativo": 526, "temperatura": 12},
+            {
+                "tiempo_real": "HH:MM:SS (24 hr format)",
+                "tiempo_relativo": "N/D",
+                "temperatura": "N/D",
+            },
         ]
 
         self.datatable = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text("Hora Real", **TEXT_STYLES["table_label_style"])),
                 ft.DataColumn(
-                    ft.Text("Tiempo Relativo", **TEXT_STYLES["table_label_style"]),
+                    ft.Text("Tiempo Relativo (s)", **TEXT_STYLES["table_label_style"]),
                     numeric=True,
                 ),
                 ft.DataColumn(
@@ -352,7 +411,9 @@ class MeasuresBlock_Table(ft.Container):
             rows=[],
         )
 
+        # Configuraciones iniciales: Placeholder y disabled
         self.set_values(self.table_values)
+        self.placeholder_deleted = False
 
         self.content = ft.Column(
             controls=[
@@ -362,7 +423,23 @@ class MeasuresBlock_Table(ft.Container):
             expand=True,
         )
 
+    def set_placeholder(self):
+        self.table_values = [
+            {
+                "tiempo_real": "HH:MM:SS (24 hr format)",
+                "tiempo_relativo": "N/D",
+                "temperatura": "N/D",
+            },
+        ]
+        self.set_values(self.table_values)
+        self.placeholder_deleted = False
+
+    def set_mb_options(self, mb_options: ft.Container):
+        self.mb_options = mb_options
+
     def set_values(self, value_list: list):
+        self.placeholder_deleted = True
+        self.datatable.rows = []
         self.table_values = value_list
         for value in value_list:
             self.datatable.rows.append(
@@ -390,10 +467,301 @@ class MeasuresBlock_Table(ft.Container):
                 )
             )
 
-    def insert_value(self, atr1: str, atr2: str): ...
+    def insert_value(self, real_time: float, r_time: float, temperature: float):
+
+        if not self.placeholder_deleted:
+            self.placeholder_deleted = True
+            self.table_values = []
+            self.datatable.rows = []
+            self.mb_options.toggle_datatable_buttons()
+
+        self.datatable.rows.append(
+            ft.DataRow(
+                cells=[
+                    ft.DataCell(
+                        ft.Text(
+                            str(real_time),
+                            **TEXT_STYLES["table_values_style"],
+                        )
+                    ),
+                    ft.DataCell(
+                        ft.Text(
+                            str(r_time),
+                            **TEXT_STYLES["table_values_style"],
+                        )
+                    ),
+                    ft.DataCell(
+                        ft.Text(
+                            str(temperature),
+                            **TEXT_STYLES["table_values_style"],
+                        )
+                    ),
+                ]
+            )
+        )
+
+    def insert_temp_measure(self, temp_measure: TempMeasure):
+        relative_time = time_manager.get_relative_time(temp_measure.timestamp)
+        real_time = time_manager.format_relative_time(relative_time, 5)
+        temperature = temp_measure.temperature
+
+        self.insert_value(real_time, relative_time, temperature)
+
+    def delete_last_value(self):
+        self.datatable.rows.pop()
+        if len(self.datatable.rows) == 0:
+            return True  # si quedo vacia
+        return False
+
+
+class MeasuresBlock_AmbientalConditions(ft.Container):
+    def __init__(self):
+        super().__init__(**section_block_style)
+        self.expand = 1
+
+        self.amb_temp_measure_field = ft.TextField(
+            label="Temperatura Ambiente (°C)",
+            label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
+            width=float("inf"),
+            color=LIGHT_COLORS["text"],
+            border_color=LIGHT_COLORS["primary"],
+            text_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_style"]),
+        )
+
+        self.amb_temp_text = ft.Text(
+            "No definida",
+            **TEXT_STYLES["big_value_3_style"],
+        )
+
+        self.submit_button = ft.Button(
+            "Fijar Temperatura Ambiente",
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=LIGHT_COLORS["primary"],
+                text_style=ft.TextStyle(
+                    **TEXT_STYLES["submit_button_text_style"],
+                ),
+            ),
+            on_click=self.set_amb_temp,
+        )
+
+        self.content = ft.Column(
+            controls=[
+                ft.Text("Temperatura Ambiente", **TEXT_STYLES["title_3_style"]),
+                # ft.Container(height=10),
+                self.amb_temp_text,
+                self.amb_temp_measure_field,
+                self.submit_button,
+            ],
+            expand=True,
+        )
+
+    def set_amb_temp(self):
+        amb_temp = float(self.amb_temp_measure_field.value)
+        self.amb_temp_measure_field.value = ""
+
+        self.amb_temp_text.value = f"{amb_temp}°C"
+
+        # TODO: Send ambtemp to NCL
+
+
+class MeasuresBlock_Options(ft.Container):
+    def __init__(self, reset_timer_dialog: ft.AlertDialog):
+        super().__init__(**section_block_style)
+        self.reset_timer_dialog = reset_timer_dialog
+        self.expand = 1
+
+        self.button_style = ft.ButtonStyle(
+            color=LIGHT_COLORS["primary"],
+            bgcolor=LIGHT_COLORS["background"],
+            side=ft.BorderSide(2, LIGHT_COLORS["primary"]),
+            shape=ft.RoundedRectangleBorder(radius=5),
+            text_style=ft.TextStyle(
+                **TEXT_STYLES["submit_button_text_style"],
+            ),
+        )
+
+        self.disabled_button_style = ft.ButtonStyle(
+            color=ft.Colors.with_opacity(0.5, LIGHT_COLORS["primary"]),
+            bgcolor=LIGHT_COLORS["background"],
+            side=ft.BorderSide(2, ft.Colors.with_opacity(0.5, LIGHT_COLORS["primary"])),
+            shape=ft.RoundedRectangleBorder(radius=5),
+            text_style=ft.TextStyle(
+                **TEXT_STYLES["submit_button_text_style"],
+            ),
+        )
+
+        self.delete_last_measure_button = ft.Button(
+            "Eliminar última medición",
+            disabled=True,
+            style=self.disabled_button_style,
+            on_click=self.delete_last_measure,
+        )
+
+        self.empty_table_button = ft.Button(
+            "Vaciar tabla de mediciones",
+            disabled=True,
+            style=self.disabled_button_style,
+            on_click=self.empty_datatable,
+        )
+
+        reset_timer_button = ft.Button(
+            "Reiniciar Cronómetro",
+            style=self.button_style,
+            on_click=self.reset_time_manager,
+        )
+
+        self.content = ft.Column(
+            controls=[
+                ft.Text("Opciones", **TEXT_STYLES["title_3_style"]),
+                ft.Container(height=10),
+                self.delete_last_measure_button,
+                self.empty_table_button,
+                reset_timer_button,
+            ],
+            expand=True,
+        )
+
+    def toggle_datatable_buttons(self):
+        if self.delete_last_measure_button.disabled:
+            self.delete_last_measure_button.disabled = False
+            self.empty_table_button.disabled = False
+            self.delete_last_measure_button.style = self.button_style
+            self.empty_table_button.style = self.button_style
+        else:
+            self.delete_last_measure_button.disabled = True
+            self.empty_table_button.disabled = True
+            self.delete_last_measure_button.style = self.disabled_button_style
+            self.empty_table_button.style = self.disabled_button_style
+
+    def set_mb_table(self, mb_table: ft.Container):
+        self.mb_table = mb_table
+
+    def delete_last_measure(self):
+        is_empty = self.mb_table.delete_last_value()
+
+        if is_empty:
+            self.toggle_datatable_buttons()
+            self.mb_table.set_placeholder()
+
+        # TODO: Delete last measure from NCL
+
+    def empty_datatable(self):
+        self.toggle_datatable_buttons()
+        self.mb_table.set_placeholder()
+
+        # TODO: Delete all measures from NCL
+
+    def reset_time_manager(self):
+        self.reset_timer_dialog.open = True
 
 
 class MeasuresBlock(ft.Container):
+    def __init__(self):
+        super().__init__(**section_block_invisible_style)
+        self.content_height = 520
+        self.height = self.content_height
+
+        ## VENTANA EMERGENTE: Cambio de start_time
+        def yes_action():
+            time_manager.reset_start_time()
+            # Vaciar tabla si no esta vacía
+            if mb_table.placeholder_deleted:
+                mb_options.empty_datatable()
+            # TODO: Empty NCL
+            self.reset_timer_dialog.open = False
+
+        def no_action():
+            self.reset_timer_dialog.open = False
+
+        self.reset_timer_dialog = ft.AlertDialog(
+            modal=True,  # Obligatorio responder
+            bgcolor=LIGHT_COLORS["background"],
+            title=ft.Text(
+                "Posible pérdida de datos",
+                **TEXT_STYLES["alert_dialog_title_style"],
+            ),
+            content=ft.Text(
+                "Reiniciar el tiempo de referencia del cronómetro borrará todas las mediciones que \n"
+                + "utilizan tiempo relativo. Esto incluye todas las mediciones de temperatura que ha \n"
+                + "guardado hasta el momento. ¿Desea proceder?",
+                **TEXT_STYLES["alert_dialog_description_style"],
+            ),
+            actions=[
+                ft.TextButton(
+                    ft.Text(
+                        "Sí, eliminar mediciones",
+                        **TEXT_STYLES["alert_dialog_textbutton_style"],
+                    ),
+                    on_click=yes_action,
+                ),
+                ft.TextButton(
+                    ft.Text(
+                        "No, cancelar",
+                        **TEXT_STYLES["alert_dialog_textbutton_style"],
+                    ),
+                    on_click=no_action,
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,  # Alinea los botones a la derecha
+        )
+
+        ## SUBBLOQUE: Measures
+        mb_measures = MeasuresBlock_Measures()
+
+        self.time_measure_field = mb_measures.time_measure_field
+        self.temperature_measure_field = mb_measures.temperature_measure_field
+
+        ## SUBBLOQUE: TimeNow
+        mb_time_now = MeasuresBlock_TimeNow()
+
+        self.time_text = mb_time_now.time_text
+        self.r_time_text = mb_time_now.rtime_text
+        self.r_time_since_text = mb_time_now.rtime_since_text
+
+        ## SUBBLOQUE: Table
+        mb_table = MeasuresBlock_Table()
+
+        mb_measures.set_mb_table(mb_table)
+
+        ## SUBBLOQUE: AmbientalConditions
+        mb_ambiental_conditions = MeasuresBlock_AmbientalConditions()
+
+        ## SUBBLOQUE: Options
+        mb_options = MeasuresBlock_Options(self.reset_timer_dialog)
+
+        mb_options.set_mb_table(mb_table)
+        mb_table.set_mb_options(mb_options)
+
+        self.content = ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        mb_time_now,
+                        mb_table,
+                    ],
+                    expand=True,
+                ),
+                ft.Row(
+                    controls=[
+                        mb_measures,
+                        mb_ambiental_conditions,
+                        mb_options,
+                    ],
+                    expand=True,
+                ),
+            ],
+            # height=self.content_height,
+            expand=True,
+        )
+
+
+# BLOQUE DE CONFIGURACIÓN DE PREDICCIONES ______________________________________
+# Contiene toda la sección de mediciones, donde el usuario puede ingresar
+# valores medidos y revisar aquellos que ya han sido introducidos.
+
+
+class NCLConfigBlock(ft.Container):
     def __init__(self):
         super().__init__(**section_block_invisible_style)
 
@@ -401,11 +769,7 @@ class MeasuresBlock(ft.Container):
         self.height = self.content_height
 
         self.content = ft.Row(
-            controls=[
-                MeasuresBlock_Measures(),
-                MeasuresBlock_TimeNow(),
-                MeasuresBlock_Table(),
-            ],
+            controls=[],
             height=self.content_height,
             expand=True,
         )
@@ -626,10 +990,11 @@ class GraphAndValuesBlock(ft.Container):
 
 
 class DebugBlock(ft.Container):
-    def __init__(self):
+    def __init__(self, debug_options: dict):
         super().__init__(**section_block_style)
 
-        self.content_height = 100
+        self.debug_options = debug_options
+        self.content_height = 150
         self.height = self.content_height
 
         self.chk_show_relative_time_field = ft.Checkbox(
@@ -637,6 +1002,17 @@ class DebugBlock(ft.Container):
                 "Permitir ingresar tiempos relativos",
                 **TEXT_STYLES["checkbox_label_style"],
             ),
+            on_change=self.on_change_show_relative_time_field,
+            value=True,
+            **checkbox_style,
+        )
+
+        self.chk_show_temp_manager_values = ft.Checkbox(
+            ft.Text(
+                "Mostrar en la consola los valores del TimeManager",
+                **TEXT_STYLES["checkbox_label_style"],
+            ),
+            on_change=self.on_change_show_temp_manager_values,
             **checkbox_style,
         )
 
@@ -646,9 +1022,28 @@ class DebugBlock(ft.Container):
                     "Opciones Avanzadas (De Prueba)", **TEXT_STYLES["title_3_style"]
                 ),
                 self.chk_show_relative_time_field,
+                self.chk_show_temp_manager_values,
             ],
             expand=True,
         )
+
+    def on_change_show_relative_time_field(self):
+        self.debug_options["show_relative_time_field"] = (
+            self.chk_show_relative_time_field.value
+        )
+
+        print(
+            f"<DebugBlock> CHANGED DEBUG CONFIG: 'show_relative_time_field' -> {self.chk_show_relative_time_field.value}"
+        )  # Debug
+
+    def on_change_show_temp_manager_values(self):
+        self.debug_options["show_temp_manager_values"] = (
+            self.chk_show_temp_manager_values.value
+        )
+
+        print(
+            f"<DebugBlock> CHANGED DEBUG CONFIG: 'show_temp_manager_values' -> {self.chk_show_temp_manager_values.value}"
+        )  # Debug
 
 
 # BLOQUE DE MÁS INFORMACIÓN ____________________________________________________
@@ -684,14 +1079,29 @@ class MoreInfoBlock(ft.Container):
 
 def view(page: ft.Page):
 
+    # DICCIONARIO DE FLAGS PARA OPCIONES DE DESARROLLADOR ______________________
+    # Es un diccionario temporal que guarda las configuraciones del usuario
+
+    debug_options: dict = {
+        "show_relative_time_field": True,
+        "show_temp_manager_values": False,
+    }
+
     # COLUMNA CENTRAL __________________________________________________________
     # Todos los componentes de la página se colocan dentro de una columna
     # envuelta en un container que restringe su tamaño al 80% horizontal.
 
     block_1 = MeasuresBlock()
-    block_2 = GraphAndValuesBlock()
-    block_3 = DebugBlock()
-    block_4 = MoreInfoBlock(page)
+    block_2 = NCLConfigBlock()
+    block_3 = GraphAndValuesBlock()
+    block_4 = DebugBlock(debug_options)
+    block_5 = MoreInfoBlock(page)
+
+    # VENTANAS EMERGENTES PRECARGADAS __________________________________________
+    # Estas son ventanas emergentes que deben ser precargadas para poder ser
+    # luego mostradas.
+
+    page.add(block_1.reset_timer_dialog)
 
     central_column = ft.Container(
         content=ft.Column(
@@ -699,11 +1109,13 @@ def view(page: ft.Page):
                 TitleBlock(),
                 SectionTitle("Mediciones de Temperatura", block_1),
                 block_1,
-                SectionTitle("Gráficas y Valores Calculados", block_2),
+                SectionTitle("Configuración de Predicciones", block_2),
                 block_2,
-                SectionTitle("Debug", block_3),
+                SectionTitle("Gráficas y Valores Calculados", block_3),
                 block_3,
+                SectionTitle("Debug", block_4),
                 block_4,
+                block_5,
             ],
             spacing=15,
             alignment=ft.MainAxisAlignment.CENTER,
@@ -734,5 +1146,56 @@ def view(page: ft.Page):
         bgcolor=LIGHT_COLORS["background_2"],
         scroll=ft.ScrollMode.AUTO,
     )
+
+    # MÓDULOS DE CÁLCULO _______________________________________________________
+    # En esta sección se encuentran los componentes necesarios para los cálculos
+    # del tiempo y otros.
+
+    global time_manager
+    time_manager = TimeManager(3)
+
+    # FUNCIÓN DE ACTUALIZACIÓN _____________________________________________________
+    # Esta función es la que se encarga de actualizar los componentes cada segundo
+    # o en intervalos de tiempo incluso más cortos.
+
+    async def async_update():
+        page.update()
+
+    def tm_runnable_tick():
+
+        # BLOQUE 1: MeasuresBlock()
+        time_now = time_manager.format_relative_time(
+            time_manager.get_relative_time(), 5
+        )
+        block_1.time_text.value = time_now
+
+        rtime_now = f"{time_manager.get_relative_time():.1f} sec"
+        block_1.r_time_text.value = rtime_now
+
+        start_time = time_now = time_manager.format_relative_time(0, 5)
+        block_1.r_time_since_text.value = f"desde las {start_time}"
+
+        # BLOQUE 4: MoreInfoBlock()
+        block_1.time_measure_field.visible = debug_options["show_relative_time_field"]
+
+        # ACTUALIZACIÓN
+        page.run_task(async_update)
+
+        # DEBUG
+
+        if debug_options["show_temp_manager_values"]:
+            print("get_time() -> ", time_manager.get_time())
+            print("get_relative_time() -> ", time_manager.get_relative_time())
+            print(
+                "get_relative_time_to_timestamp(get_time()) -> ",
+                time_manager.relative_time_to_timestamp(time_manager.get_time()),
+            )
+            print(
+                "format_relative_time(get_relative_time()) -> ",
+                time_manager.format_relative_time(time_manager.get_relative_time(), 5),
+            )
+
+    time_manager.set_runnable_tick(tm_runnable_tick)
+    time_manager.start_runnable()
 
     return content

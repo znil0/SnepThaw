@@ -116,6 +116,12 @@ TEXT_STYLES: dict = {
         "weight": "w500",
         "color": LIGHT_COLORS["primary"],
     },
+    "big_value_3_style": {
+        "font_family": "Archivo",
+        "size": 28,
+        "weight": "w500",
+        "color": LIGHT_COLORS["primary"],
+    },
     "checkbox_label_style": {
         "font_family": "DM Sans 14pt",
         "size": 14,
@@ -127,6 +133,25 @@ TEXT_STYLES: dict = {
         "font_family": "DM Sans 14pt",
         "size": 14,
         "weight": "w400",
+        "color": LIGHT_COLORS["primary"],
+    },
+    ## PARA LAS VENTANAS EMERGENTES
+    "alert_dialog_title_style": {
+        "font_family": "Archivo",
+        "size": 24,
+        "weight": "w600",
+        "color": LIGHT_COLORS["primary"],
+    },
+    "alert_dialog_description_style": {
+        "font_family": "DM Sans 14pt",
+        "size": 14,
+        "weight": "w400",
+        "color": LIGHT_COLORS["text"],
+    },
+    "alert_dialog_textbutton_style": {
+        "font_family": "DM Sans 14pt",
+        "size": 16,
+        "weight": "w600",
         "color": LIGHT_COLORS["primary"],
     },
 }
