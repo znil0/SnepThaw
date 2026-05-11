@@ -21,35 +21,40 @@ class NewtonCoolingLaw:
         time_manager: TimeManager = None,
     ):
         """
-        intervals_ahead: Cuantas predicciones va a retornar.
+        seconds_ahead: Cuantos segundos en adelante va a calcular.
         amb_temp: Temperatura ambiente en °C.
         measure_1: Primera medición. (opcional, se pueden actualizar luego)
         measure_2: Segunda medición. (opcional, se pueden actualizar luego)
         time_manager: instancia de TimeManager. (Usar si se quiere proveer otra Hora Inicial o Intervalo)
         """
 
+        self.seconds_ahead = seconds_ahead
         self.amb_temp = amb_temp
         self.measure_1 = measure_1
         self.measure_2 = measure_2
+        self.r: float = None
 
         if time_manager is None:
             self.time_manager = TimeManager(2)
         else:
             self.time_manager = time_manager
 
-        self.intervals_ahead = int(seconds_ahead / self.time_manager.interval)
+        self.intervals_ahead = int(self.seconds_ahead / self.time_manager.interval)
 
-        self.r = None
-        if self.isReady():
+        if self.is_ready():
             self.calculate_r()
 
     # MÉTODOS AUXILIARES
+    def set_time_manager(self, time_manager):
+        self.time_manager = time_manager
+        self.intervals_ahead = int(self.seconds_ahead / self.time_manager.interval)
+
     def edo_f(self, r, Tm):
         """Retorna una función lambda f de variables (t, T) con la Ley de
         Enfriamiento de Newton en la forma: dT/dt = f(t, T)"""
         return lambda t, T: (-1) * r * (T - Tm)
 
-    def isReady(self):
+    def is_ready(self):
         """Función auxiliar que retorna True si todos los valores necesarios
         para los cálculos se encuentran correctamente capturados."""
         state = True
@@ -75,10 +80,9 @@ class NewtonCoolingLaw:
         # Esta fórmula es exactamente la misma de la Justificación Matemática
         self.r = (1 / time_1) * m.log((temp_1 - amb_temp) / (temp_2 - amb_temp))
 
-    def add_measure(self, temperature: float):
+    def add_measure(self, temp_measure: TempMeasure):
         """Método que añade una medición de temperatura, tomando el tiempo
         de ahora como referencia."""
-        new_measure = TempMeasure(self.time_manager.get_time(), temperature)
 
         # Corrección: Si la medición 1 esta vacía, pero la medición 2 no lo está.
         # Mueve la medición 2 a la medición 1, y deja vacía medición 2.
@@ -89,14 +93,14 @@ class NewtonCoolingLaw:
         # Caso 1: No hay ninguna medición.
         # Guarda la nueva medición en medición 1.
         if self.measure_1 is None and self.measure_2 is None:
-            self.measure_1 = new_measure
+            self.measure_1 = temp_measure
             return
 
         # Caso 2: Hay una sola medición. (en medición 1)
         # Guarda la nueva medición en medición 2.
         if self.measure_1 is not None and self.measure_2 is None:
-            self.measure_2 = new_measure
-            if self.isReady():
+            self.measure_2 = temp_measure
+            if self.is_ready():
                 self.calculate_r()
             return
 
@@ -105,15 +109,47 @@ class NewtonCoolingLaw:
         # guarda la nueva medición en medición 2.
         if self.measure_1 is not None and self.measure_2 is not None:
             self.measure_1 = self.measure_2
-            self.measure_2 = new_measure
-            if self.isReady():
+            self.measure_2 = temp_measure
+            if self.is_ready():
                 self.calculate_r()
             return
 
     def add_amb_temp(self, temperature: float):
         self.amb_temp = temperature
-        if self.isReady():
+        if self.is_ready():
             self.calculate_r()
+
+    def delete_last_measure(self):
+        """Método que borra la última medición de temperatura."""
+
+        # Caso 1: No hay mediciones
+        if self.measure_1 is None and self.measure_2 is None:
+            raise RuntimeError(
+                "Se llamó a ncl.delete_last_measure(), pero no había ninguna medición."
+            )
+            return
+
+        # Caso 2: Hay una sola medición. (en medición 1)
+        if self.measure_1 is not None and self.measure_2 is None:
+            self.measure_1 = None
+            return
+
+        # Caso 3: Hay una sola medición. (en medición 2)
+        if self.measure_1 is None and self.measure_2 is not None:
+            self.measure_2 = None
+            return
+
+        # Caso 4: Hay dos mediciones guardadas, en medición 1 y 2.
+        # Elimina la medición 2
+        if self.measure_1 is not None and self.measure_2 is not None:
+            self.measure_2 = None
+            return
+
+    def delete_all_measures(self):
+        """Método que borra todas las mediciones de temperatura."""
+
+        self.measure_1 = None
+        self.measure_2 = None
 
     ## Sin métodos numéricos
     def create_ncl_function(self):
@@ -210,5 +246,5 @@ class NewtonCoolingLaw:
         self.time_manager.print_values()
 
         print("VALORES CALCULADOS")
-        print("self.isReady()       ->\t", self.isReady())
+        print("self.is_ready()       ->\t", self.is_ready())
         print("self.r               ->\t", self.r)

@@ -103,6 +103,19 @@ TEXT_STYLES: dict = {
         "weight": "w400",
         "color": LIGHT_COLORS["text"],
     },
+    ## PARA LOS LABELS DE LA GRAFICA
+    "gav_chart_title_style": {
+        "font_family": "DM Sans 14pt",
+        "size": 12,
+        "weight": "w600",
+        "color": LIGHT_COLORS["primary"],
+    },
+    "gav_chart_label_style": {
+        "font_family": "DM Sans 14pt",
+        "size": 12,
+        "weight": "w400",
+        "color": LIGHT_COLORS["text"],
+    },
     ## PARA DATOS GRANDES
     "big_value_1_style": {
         "font_family": "Archivo",
@@ -128,12 +141,31 @@ TEXT_STYLES: dict = {
         "weight": "w400",
         "color": LIGHT_COLORS["text"],
     },
+    ## PARA DATOS MUY PEQUEÑOS
+    "small_value_1_label_style": {
+        "font_family": "Jetbrains Mono",
+        "size": 11,
+        "weight": "w600",
+        "color": LIGHT_COLORS["primary"],
+    },
+    "small_value_1_style": {
+        "font_family": "Jetbrains Mono",
+        "size": 14,
+        "weight": "w400",
+        "color": LIGHT_COLORS["text"],
+    },
     ## PARA NOTAS BREVES DE LOS COMPONENTES
     "small_note_style": {
         "font_family": "DM Sans 14pt",
         "size": 14,
         "weight": "w400",
         "color": LIGHT_COLORS["primary"],
+    },
+    "small_title_style": {
+        "font_family": "DM Sans 14pt",
+        "size": 14,
+        "weight": "w400",
+        "color": LIGHT_COLORS["text"],
     },
     ## PARA LAS VENTANAS EMERGENTES
     "alert_dialog_title_style": {

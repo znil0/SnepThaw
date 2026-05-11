@@ -6,12 +6,14 @@
 import flet as ft
 import flet_charts as ftc
 import asyncio
+import random
+import math
 
 from src.ui.constants.theme_colors import LIGHT_COLORS, BASE_COLORS
 from src.ui.constants.text_styles import TEXT_STYLES
 
 from src.calculations.time_manager import TimeManager
-from src.calculations.data_types import TempMeasure
+from src.calculations.data_types import TempMeasure, TPoint
 from src.calculations.newton_cooling_law import NewtonCoolingLaw
 
 
@@ -71,12 +73,28 @@ gav_chart_style: dict = {
     "tooltip": ftc.BarChartTooltip(
         bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.WHITE)
     ),
-    "left_axis": ftc.ChartAxis(label_size=50),
-    "bottom_axis": ftc.ChartAxis(label_spacing=1, title_size=40),
+    "left_axis": ftc.ChartAxis(
+        ft.Text(
+            "Temperatura del líquido (°C)",
+            **TEXT_STYLES["gav_chart_title_style"],
+        ),
+        label_size=30,
+        title_size=30,
+    ),
+    "bottom_axis": ftc.ChartAxis(
+        ft.Text(
+            "Tiempo relativo (s)",
+            **TEXT_STYLES["gav_chart_title_style"],
+        ),
+        # label_spacing=1,
+        label_size=24,
+        title_size=30,
+    ),
     "horizontal_grid_lines": ftc.ChartGridLines(
         interval=10, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE), width=1
     ),
     "bgcolor": ft.Colors.TRANSPARENT,
+    # "margin": ft.Margin(30, 30, 30, 30),
 }
 
 
@@ -244,15 +262,259 @@ class SectionTitle(ft.Container):
         self.page.update()
 
 
+# BLOQUE DE CONFIGURACIÓN DE PREDICCIONES ______________________________________
+# Contiene toda la sección de mediciones, donde el usuario puede ingresar
+# valores medidos y revisar aquellos que ya han sido introducidos.
+
+
+class NCLConfigBlock(ft.Container):
+    def __init__(self):
+        super().__init__(**section_block_invisible_style)
+
+        self.content_height = 350
+        self.height = self.content_height
+
+        ## VENTANA EMERGENTE: execute_ncl no se puede deshacer
+        def yes_action():
+            global seconds_ahead
+            seconds_ahead = int(self.seconds_ahead_field.value)
+            global ncl_update_intervals
+            ncl_update_intervals = int(self.update_intervals_field.value)
+            global ncl
+            ncl = NewtonCoolingLaw(seconds_ahead)
+            time_manager.reset_start_time()
+            ncl.set_time_manager(time_manager)
+
+            self.disable_execute_ncl_button_and_fields()
+            self.permanent_ncl_dialog.open = False
+
+            # DEBUG
+            print(
+                "<NCLConfigBlock> Instanciated NCL with: \n"
+                + f"\t seconds_ahead -> {seconds_ahead}"
+            )
+
+            print(
+                f"<NCLConfigBlock> Stored value 'ncl_update_intervals -> {ncl_update_intervals}'"
+            )
+
+        def no_action():
+            self.permanent_ncl_dialog.open = False
+
+        self.permanent_ncl_dialog = ft.AlertDialog(
+            modal=True,  # Obligatorio responder
+            bgcolor=LIGHT_COLORS["background"],
+            title=ft.Text(
+                "Acción permanente",
+                **TEXT_STYLES["alert_dialog_title_style"],
+            ),
+            content=ft.Text(
+                "Por limitaciones del método implementado, una vez iniciado el módulo NCL \n"
+                + "sus parámetros no pueden ser modificados sin reiniciar el programa. Desea \n"
+                + "continuar?",
+                **TEXT_STYLES["alert_dialog_description_style"],
+            ),
+            actions=[
+                ft.TextButton(
+                    ft.Text(
+                        "Sí, iniciar módulo",
+                        **TEXT_STYLES["alert_dialog_textbutton_style"],
+                    ),
+                    on_click=yes_action,
+                ),
+                ft.TextButton(
+                    ft.Text(
+                        "No, cancelar",
+                        **TEXT_STYLES["alert_dialog_textbutton_style"],
+                    ),
+                    on_click=no_action,
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,  # Alinea los botones a la derecha
+        )
+
+        # SECCIÓN DE PARAMETROS
+
+        self.seconds_ahead_field = ft.TextField(
+            label="seconds_ahead",
+            label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
+            width=float("inf"),
+            color=LIGHT_COLORS["text"],
+            border_color=LIGHT_COLORS["primary"],
+            text_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_style"]),
+        )
+
+        self.update_intervals_field = ft.TextField(
+            label="update_intervals",
+            label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
+            width=float("inf"),
+            color=LIGHT_COLORS["text"],
+            border_color=LIGHT_COLORS["primary"],
+            text_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_style"]),
+        )
+
+        self.execute_ncl_button = ft.Button(
+            "Ejecutar módulo NCL",
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=LIGHT_COLORS["primary"],
+                text_style=ft.TextStyle(
+                    **TEXT_STYLES["submit_button_text_style"],
+                ),
+            ),
+            on_click=self.on_click_execute_ncl,
+        )
+
+        parameters_block = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(
+                        "Parámetros de cálculo",
+                        **TEXT_STYLES["title_3_style"],
+                    ),
+                    ft.Text(
+                        "Parámetro que define la cantidad de segundos a predecir con cada iteración.",
+                        **TEXT_STYLES["small_title_style"],
+                    ),
+                    self.seconds_ahead_field,
+                    ft.Text(
+                        "Parámetro que define la cantidad de ticks a saltar antes de actualizar la gráfica. (8 ticks = 1 segundo).",
+                        **TEXT_STYLES["small_title_style"],
+                    ),
+                    self.update_intervals_field,
+                    self.execute_ncl_button,
+                ],
+                expand=True,
+            ),
+            **section_block_style,
+        )
+        parameters_block.expand = 1
+
+        # SECCIÓN DE VALORES CALCULADOS
+        self.intervals_ahead_text = ft.Text(
+            "No instanciado",
+            **TEXT_STYLES["small_value_1_style"],
+        )
+        self.measure_1_text = ft.Text(
+            "No instanciado",
+            **TEXT_STYLES["small_value_1_style"],
+        )
+        self.measure_2_text = ft.Text(
+            "No instanciado",
+            **TEXT_STYLES["small_value_1_style"],
+        )
+        self.amb_temp_text = ft.Text(
+            "No instanciado",
+            **TEXT_STYLES["small_value_1_style"],
+        )
+        self.r_text = ft.Text(
+            "No instanciado",
+            **TEXT_STYLES["small_value_1_style"],
+        )
+        self.is_ready_text = ft.Text(
+            "No instanciado",
+            **TEXT_STYLES["small_value_1_style"],
+        )
+
+        calculated_block = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(
+                        "Constantes y valores calculados",
+                        **TEXT_STYLES["title_3_style"],
+                    ),
+                    ft.Container(height=10),
+                    ft.Text(
+                        "intervals_ahead (Intervalos a Medir)",
+                        **TEXT_STYLES["small_value_1_label_style"],
+                    ),
+                    self.intervals_ahead_text,
+                    ft.Text(
+                        "measure_1 (Primera Medición)",
+                        **TEXT_STYLES["small_value_1_label_style"],
+                    ),
+                    self.measure_1_text,
+                    ft.Text(
+                        "measure_2 (Segunda Medición)",
+                        **TEXT_STYLES["small_value_1_label_style"],
+                    ),
+                    self.measure_2_text,
+                    ft.Text(
+                        "amb_temp (Temperatura Ambiente)",
+                        **TEXT_STYLES["small_value_1_label_style"],
+                    ),
+                    self.amb_temp_text,
+                    ft.Text(
+                        "r (Coeficiente de Enfriamiento)",
+                        **TEXT_STYLES["small_value_1_label_style"],
+                    ),
+                    self.r_text,
+                    ft.Text(
+                        "isReady (Flag de Estado)",
+                        **TEXT_STYLES["small_value_1_label_style"],
+                    ),
+                    self.is_ready_text,
+                ],
+                expand=True,
+                spacing=0,
+            ),
+            **section_block_style,
+        )
+        calculated_block.expand = 2
+
+        self.content = ft.Row(
+            controls=[
+                parameters_block,
+                calculated_block,
+            ],
+            height=self.content_height,
+            expand=True,
+        )
+
+    def on_click_execute_ncl(self):
+        self.permanent_ncl_dialog.open = True
+
+    def disable_execute_ncl_button_and_fields(self):
+        # Desactivar botón
+        self.execute_ncl_button.disable = True
+        self.execute_ncl_button.content = "Instanciado"
+        self.execute_ncl_button.style = self.disabled_button_style = ft.ButtonStyle(
+            color=ft.Colors.with_opacity(0.5, LIGHT_COLORS["primary"]),
+            bgcolor=LIGHT_COLORS["background"],
+            side=ft.BorderSide(2, ft.Colors.with_opacity(0.5, LIGHT_COLORS["primary"])),
+            shape=ft.RoundedRectangleBorder(radius=5),
+            text_style=ft.TextStyle(
+                **TEXT_STYLES["submit_button_text_style"],
+            ),
+        )
+
+        # Desactivar labels
+        self.seconds_ahead_field.disabled = True
+        self.seconds_ahead_field.bgcolor = LIGHT_COLORS["background_2"]
+        self.update_intervals_field.disabled = True
+        self.update_intervals_field.bgcolor = LIGHT_COLORS["background_2"]
+
+    def update_calculated_values(self):
+        global ncl
+        if ncl is not None:
+            self.intervals_ahead_text.value = str(ncl.intervals_ahead)
+            self.measure_1_text.value = str(ncl.measure_1)
+            self.measure_2_text.value = str(ncl.measure_2)
+            self.amb_temp_text.value = str(ncl.amb_temp)
+            self.r_text.value = str(ncl.r)
+            self.is_ready_text.value = str(ncl.is_ready())
+
+
 # BLOQUE DE MEDICIONES (Y SUS SUB-BLOQUES) _____________________________________
 # Contiene toda la sección de mediciones, donde el usuario puede ingresar
 # valores medidos y revisar aquellos que ya han sido introducidos.
 
 
 class MeasuresBlock_Measures(ft.Container):
-    def __init__(self):
+    def __init__(self, ncl_not_defined_dialog: ft.AlertDialog):
         super().__init__(**section_block_style)
 
+        self.ncl_not_defined_dialog = ncl_not_defined_dialog
         self.expand = 1
 
         self.time_measure_field = ft.TextField(
@@ -307,11 +569,9 @@ class MeasuresBlock_Measures(ft.Container):
         else:
             rtime = time_manager.get_relative_time()
         rtime = time_manager.round_to_interval(rtime)
-        self.time_measure_field.value = ""
 
         # Obtener temperatura
         temp = float(self.temperature_measure_field.value)
-        self.temperature_measure_field.value = ""
 
         # Ensamblar TempMeasure y mostrarlo en tabla
         temp_measure = TempMeasure(time_manager.relative_time_to_timestamp(rtime), temp)
@@ -321,9 +581,16 @@ class MeasuresBlock_Measures(ft.Container):
             f"\n\ttemp_measure.temperature -> {temp_measure.temperature}",
         )
 
-        self.mb_table.insert_temp_measure(temp_measure)
+        # ENVIAR MEDICIÓN A NCL
+        global ncl
+        if ncl is not None:
+            ncl.add_measure(temp_measure)
 
-        # TODO: Send temp_measure to NCL
+            self.time_measure_field.value = ""
+            self.temperature_measure_field.value = ""
+            self.mb_table.insert_temp_measure(temp_measure)
+        else:
+            self.ncl_not_defined_dialog.open = True
 
 
 class MeasuresBlock_TimeNow(ft.Container):
@@ -332,17 +599,17 @@ class MeasuresBlock_TimeNow(ft.Container):
         self.expand = 1
 
         self.time_text = ft.Text(
-            "14:16:23",
+            "HH:MM:SS",
             **TEXT_STYLES["big_value_2_style"],
         )
 
         self.rtime_text = ft.Text(
-            "12 sec",
+            "N/D sec",
             **TEXT_STYLES["big_value_2_style"],
         )
 
         self.rtime_since_text = ft.Text(
-            "desde las 4:10:34",
+            "desde las HH:MM:SS",
             **TEXT_STYLES["small_note_style"],
         )
 
@@ -562,7 +829,9 @@ class MeasuresBlock_AmbientalConditions(ft.Container):
 
         self.amb_temp_text.value = f"{amb_temp}°C"
 
-        # TODO: Send ambtemp to NCL
+        # ENVIAR TEMPERATURA AMBIENTE A NCL
+        global ncl
+        ncl.add_amb_temp(amb_temp)
 
 
 class MeasuresBlock_Options(ft.Container):
@@ -644,13 +913,17 @@ class MeasuresBlock_Options(ft.Container):
             self.toggle_datatable_buttons()
             self.mb_table.set_placeholder()
 
-        # TODO: Delete last measure from NCL
+        # BORRAR ULTIMA MEDICIÓN DEl NCL
+        global ncl
+        ncl.delete_last_measure()
 
     def empty_datatable(self):
         self.toggle_datatable_buttons()
         self.mb_table.set_placeholder()
 
-        # TODO: Delete all measures from NCL
+        # BORRAR TODAS LAS MEDICIONES DEL NCL
+        global ncl
+        ncl.delete_all_measures()
 
     def reset_time_manager(self):
         self.reset_timer_dialog.open = True
@@ -663,15 +936,18 @@ class MeasuresBlock(ft.Container):
         self.height = self.content_height
 
         ## VENTANA EMERGENTE: Cambio de start_time
-        def yes_action():
+        def rtd_yes_action():
             time_manager.reset_start_time()
             # Vaciar tabla si no esta vacía
             if mb_table.placeholder_deleted:
                 mb_options.empty_datatable()
-            # TODO: Empty NCL
+            # ELIMINAR TODAS LAS MEDICIONES DEL NCL
+            global ncl
+            if ncl is not None:
+                ncl.delete_all_measures()
             self.reset_timer_dialog.open = False
 
-        def no_action():
+        def rtd_no_action():
             self.reset_timer_dialog.open = False
 
         self.reset_timer_dialog = ft.AlertDialog(
@@ -693,21 +969,48 @@ class MeasuresBlock(ft.Container):
                         "Sí, eliminar mediciones",
                         **TEXT_STYLES["alert_dialog_textbutton_style"],
                     ),
-                    on_click=yes_action,
+                    on_click=rtd_yes_action,
                 ),
                 ft.TextButton(
                     ft.Text(
                         "No, cancelar",
                         **TEXT_STYLES["alert_dialog_textbutton_style"],
                     ),
-                    on_click=no_action,
+                    on_click=rtd_no_action,
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,  # Alinea los botones a la derecha
+        )
+
+        ## VENTANA EMERGENTE: Error al ingresar medicion con ncl sin definir
+        def nnd_ok_action():
+            self.ncl_not_defined_dialog.open = False
+
+        self.ncl_not_defined_dialog = ft.AlertDialog(
+            modal=True,  # Obligatorio responder
+            bgcolor=LIGHT_COLORS["background"],
+            title=ft.Text(
+                "Error",
+                **TEXT_STYLES["alert_dialog_title_style"],
+            ),
+            content=ft.Text(
+                "Por favor, defina los parámetros del módulo NCL antes de ingresar mediciones.",
+                **TEXT_STYLES["alert_dialog_description_style"],
+            ),
+            actions=[
+                ft.TextButton(
+                    ft.Text(
+                        "Aceptar",
+                        **TEXT_STYLES["alert_dialog_textbutton_style"],
+                    ),
+                    on_click=nnd_ok_action,
                 ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,  # Alinea los botones a la derecha
         )
 
         ## SUBBLOQUE: Measures
-        mb_measures = MeasuresBlock_Measures()
+        mb_measures = MeasuresBlock_Measures(self.ncl_not_defined_dialog)
 
         self.time_measure_field = mb_measures.time_measure_field
         self.temperature_measure_field = mb_measures.temperature_measure_field
@@ -752,25 +1055,6 @@ class MeasuresBlock(ft.Container):
                 ),
             ],
             # height=self.content_height,
-            expand=True,
-        )
-
-
-# BLOQUE DE CONFIGURACIÓN DE PREDICCIONES ______________________________________
-# Contiene toda la sección de mediciones, donde el usuario puede ingresar
-# valores medidos y revisar aquellos que ya han sido introducidos.
-
-
-class NCLConfigBlock(ft.Container):
-    def __init__(self):
-        super().__init__(**section_block_invisible_style)
-
-        self.content_height = 260
-        self.height = self.content_height
-
-        self.content = ft.Row(
-            controls=[],
-            height=self.content_height,
             expand=True,
         )
 
@@ -854,7 +1138,36 @@ class GAVChart(ftc.LineChart):
             max_y = max(y_values)
             self.left_axis.max = max_y + (max_y * 0.1)  # Añadir 10% de margen
 
-    def create_data_points(self, x, y, line: int):
+    def load_labels(self):
+        x_labels: list[ftc.ChartAxisLabel] = []
+        y_labels: list[ftc.ChartAxisLabel] = []
+
+        for i in range(0, 100):
+            y_labels.append(
+                ftc.ChartAxisLabel(
+                    value=i,
+                    label=ft.Text(
+                        str(i),
+                        **TEXT_STYLES["gav_chart_label_style"],
+                    ),
+                )
+            )
+
+        for i in range(int(self.min_x), int(self.max_x)):
+            x_labels.append(
+                ftc.ChartAxisLabel(
+                    value=i,
+                    label=ft.Text(
+                        str(i),
+                        **TEXT_STYLES["gav_chart_label_style"],
+                    ),
+                )
+            )
+
+        self.bottom_axis.labels = x_labels
+        self.left_axis.labels = y_labels
+
+    def create_data_point(self, x, y, line: int):
         if line == 1:
             self.points_1.append(
                 ftc.LineChartDataPoint(
@@ -867,7 +1180,7 @@ class GAVChart(ftc.LineChart):
                 ),
             )
 
-            self.line_1.data_points = self.points_1.copy()
+            self.line_1.points = self.points_1.copy()
         if line == 2:
             self.points_2.append(
                 ftc.LineChartDataPoint(
@@ -880,19 +1193,51 @@ class GAVChart(ftc.LineChart):
                 ),
             )
 
-            self.line_2.data_points = self.points_2.copy()
+            self.line_2.points = self.points_2.copy()
         self.update_axis_limits()
-        self.update()
+        self.load_labels()
+
+    def set_tpoint_list_to_line(self, point_list: list[TPoint], line: int):
+        # Borrar todo en la línea
+        if line == 1:
+            self.points_1 = []
+            self.line_1.points = []
+        if line == 2:
+            self.points_2 = []
+            self.line_2.points = []
+
+        # Añadir puntos a la línea
+        for i in range(0, len(point_list)):
+            x = point_list[i].rtime
+            y = point_list[i].temperature
+            self.create_data_point(x, y, line)
 
 
 class GraphAndValuesBlock_Graph(ft.Container):
     def __init__(self):
         super().__init__(**section_block_style)
+        self.padding = ft.Padding(10, 30, 30, 10)
         self.expand = 3
 
         self.graph = GAVChart(BASE_COLORS["color_3"], BASE_COLORS["color_4"])
 
         self.content = self.graph
+
+        self.set_placeholder()
+
+    def set_placeholder(self):
+        placeholder_values_1: list[TPoint] = []
+        placeholder_values_2: list[TPoint] = []
+
+        for i in range(0, 30):
+            example_temp_1 = 50 * math.exp(-0.2 * i) + 3 * random.random()
+            placeholder_values_1.append(TPoint(i, example_temp_1))
+
+            example_temp_2 = 50 * math.exp(-0.2 * i) + 3 * random.random()
+            placeholder_values_2.append(TPoint(i, example_temp_2))
+
+        self.graph.set_tpoint_list_to_line(placeholder_values_1, 1)
+        self.graph.set_tpoint_list_to_line(placeholder_values_2, 2)
 
 
 class GraphAndValuesBlock_Predicted(ft.Container):
@@ -971,17 +1316,63 @@ class GraphAndValuesBlock(ft.Container):
     def __init__(self):
         super().__init__(**section_block_invisible_style)
 
-        self.content_height = 450
+        self.content_height = 400
         self.height = self.content_height
+
+        self.graph_block = GraphAndValuesBlock_Graph()
+        self.predicted_block = GraphAndValuesBlock_Predicted()
 
         self.content = ft.Row(
             controls=[
-                GraphAndValuesBlock_Graph(),
-                GraphAndValuesBlock_Predicted(),
+                self.graph_block,
+                self.predicted_block,
             ],
             height=self.content_height,
             expand=True,
         )
+
+    def update_graph(self):
+        global ncl
+        if ncl is not None:
+            if ncl.is_ready():
+                ## OBTENER ARRAY DE RESULTADOS (CON METODO ANALÍTICO)
+                raw_func_array = ncl.get_prediction_with_function(10)
+                func_array = []
+                for i in range(0, len(raw_func_array) // 8):
+                    func_array.append(raw_func_array[i * 8])
+
+                ## OBTENER ARRAY DE RESULTADOS (CON METODO DE EULER)
+                raw_euler_array = ncl.get_prediction_with_euler(10)
+                euler_array = []
+                for i in range(0, len(raw_euler_array) // 8):
+                    euler_array.append(raw_euler_array[i * 8])
+
+                ## FIJAR ARRAYS A LA GRAFICA
+                self.graph_block.graph.set_tpoint_list_to_line(func_array, 1)
+                self.graph_block.graph.set_tpoint_list_to_line(euler_array, 2)
+
+                # DEBUG
+                if debug_options["show_ncl_returned_func_values"]:
+                    print(
+                        "<GraphAndValuesBlock> update_graph() -> RETURNED FUNC ARRAY (AFTER CROPPING)"
+                    )
+                    for i in range(0, len(func_array)):
+                        print(f"index {i}. \t\t {func_array[i]}")
+
+                if debug_options["show_ncl_returned_euler_values"]:
+                    print(
+                        "<GraphAndValuesBlock> update_graph() -> RETURNED EULER ARRAY (AFTER CROPPING)"
+                    )
+                    for i in range(0, len(euler_array)):
+                        print(f"index {i}. \t\t {euler_array[i]}")
+            else:
+                print(
+                    "<GraphAndValuesBlock> update_graph() -> could not get array because NCL IS NOT READY"
+                )
+        else:
+            print(
+                "<GraphAndValuesBlock> update_graph() -> could not get array because NCL IS NOT DEFINED"
+            )
 
 
 # BLOQUE DE OPCIONES AVANZADAS _________________________________________________
@@ -990,11 +1381,11 @@ class GraphAndValuesBlock(ft.Container):
 
 
 class DebugBlock(ft.Container):
-    def __init__(self, debug_options: dict):
+    def __init__(self):
         super().__init__(**section_block_style)
 
-        self.debug_options = debug_options
-        self.content_height = 150
+        global debug_options
+        self.content_height = 250
         self.height = self.content_height
 
         self.chk_show_relative_time_field = ft.Checkbox(
@@ -1016,6 +1407,24 @@ class DebugBlock(ft.Container):
             **checkbox_style,
         )
 
+        self.chk_show_ncl_returned_func_values = ft.Checkbox(
+            ft.Text(
+                "Mostrar en la consola el listado de valores calculados del MÉTODO ANALÍTICO",
+                **TEXT_STYLES["checkbox_label_style"],
+            ),
+            on_change=self.on_change_show_ncl_returned_func_values,
+            **checkbox_style,
+        )
+
+        self.chk_show_ncl_returned_euler_values = ft.Checkbox(
+            ft.Text(
+                "Mostrar en la consola el listado de valores calculados del MÉTODO DE EULER",
+                **TEXT_STYLES["checkbox_label_style"],
+            ),
+            on_change=self.on_change_show_ncl_returned_euler_values,
+            **checkbox_style,
+        )
+
         self.content = ft.Column(
             controls=[
                 ft.Text(
@@ -1023,12 +1432,15 @@ class DebugBlock(ft.Container):
                 ),
                 self.chk_show_relative_time_field,
                 self.chk_show_temp_manager_values,
+                self.chk_show_ncl_returned_func_values,
+                self.chk_show_ncl_returned_euler_values,
             ],
             expand=True,
         )
 
     def on_change_show_relative_time_field(self):
-        self.debug_options["show_relative_time_field"] = (
+        global debug_options
+        debug_options["show_relative_time_field"] = (
             self.chk_show_relative_time_field.value
         )
 
@@ -1037,12 +1449,33 @@ class DebugBlock(ft.Container):
         )  # Debug
 
     def on_change_show_temp_manager_values(self):
-        self.debug_options["show_temp_manager_values"] = (
+        global debug_options
+        debug_options["show_temp_manager_values"] = (
             self.chk_show_temp_manager_values.value
         )
 
         print(
             f"<DebugBlock> CHANGED DEBUG CONFIG: 'show_temp_manager_values' -> {self.chk_show_temp_manager_values.value}"
+        )  # Debug
+
+    def on_change_show_ncl_returned_func_values(self):
+        global debug_options
+        debug_options["show_ncl_returned_func_values"] = (
+            self.chk_show_ncl_returned_func_values.value
+        )
+
+        print(
+            f"<DebugBlock> CHANGED DEBUG CONFIG: 'show_ncl_returned_func_values' -> {self.chk_show_ncl_returned_func_values.value}"
+        )  # Debug
+
+    def on_change_show_ncl_returned_euler_values(self):
+        global debug_options
+        debug_options["show_ncl_returned_euler_values"] = (
+            self.chk_show_ncl_returned_euler_values.value
+        )
+
+        print(
+            f"<DebugBlock> CHANGED DEBUG CONFIG: 'show_ncl_returned_euler_values' -> {self.chk_show_ncl_returned_euler_values.value}"
         )  # Debug
 
 
@@ -1082,34 +1515,50 @@ def view(page: ft.Page):
     # DICCIONARIO DE FLAGS PARA OPCIONES DE DESARROLLADOR ______________________
     # Es un diccionario temporal que guarda las configuraciones del usuario
 
-    debug_options: dict = {
+    global debug_options
+    debug_options = {
         "show_relative_time_field": True,
         "show_temp_manager_values": False,
+        "show_ncl_returned_func_values": False,
+        "show_ncl_returned_euler_values": False,
     }
+
+    # MÓDULOS DE CÁLCULO _______________________________________________________
+    # En esta sección se encuentran los componentes necesarios para los cálculos
+    # del tiempo y otros.
+
+    global time_manager
+    time_manager = TimeManager(3)
+    global ncl
+    ncl = None
+    global ncl_update_intervals
+    ncl_update_intervals = None
 
     # COLUMNA CENTRAL __________________________________________________________
     # Todos los componentes de la página se colocan dentro de una columna
     # envuelta en un container que restringe su tamaño al 80% horizontal.
 
-    block_1 = MeasuresBlock()
-    block_2 = NCLConfigBlock()
+    block_1 = NCLConfigBlock()
+    block_2 = MeasuresBlock()
     block_3 = GraphAndValuesBlock()
-    block_4 = DebugBlock(debug_options)
+    block_4 = DebugBlock()
     block_5 = MoreInfoBlock(page)
 
     # VENTANAS EMERGENTES PRECARGADAS __________________________________________
     # Estas son ventanas emergentes que deben ser precargadas para poder ser
     # luego mostradas.
 
-    page.add(block_1.reset_timer_dialog)
+    page.add(block_1.permanent_ncl_dialog)
+    page.add(block_2.reset_timer_dialog)
+    page.add(block_2.ncl_not_defined_dialog)
 
     central_column = ft.Container(
         content=ft.Column(
             controls=[
                 TitleBlock(),
-                SectionTitle("Mediciones de Temperatura", block_1),
+                SectionTitle("Configuración de Predicciones", block_1),
                 block_1,
-                SectionTitle("Configuración de Predicciones", block_2),
+                SectionTitle("Mediciones de Temperatura", block_2),
                 block_2,
                 SectionTitle("Gráficas y Valores Calculados", block_3),
                 block_3,
@@ -1147,13 +1596,6 @@ def view(page: ft.Page):
         scroll=ft.ScrollMode.AUTO,
     )
 
-    # MÓDULOS DE CÁLCULO _______________________________________________________
-    # En esta sección se encuentran los componentes necesarios para los cálculos
-    # del tiempo y otros.
-
-    global time_manager
-    time_manager = TimeManager(3)
-
     # FUNCIÓN DE ACTUALIZACIÓN _____________________________________________________
     # Esta función es la que se encarga de actualizar los componentes cada segundo
     # o en intervalos de tiempo incluso más cortos.
@@ -1161,22 +1603,43 @@ def view(page: ft.Page):
     async def async_update():
         page.update()
 
+    global tick_count
+    tick_count = -1
+
     def tm_runnable_tick():
+        global tick_count
+        global ncl_update_intervals
+        tick_count += 1
+        if tick_count >= 1000000:
+            tick_count = 0
+            print(
+                "<tm_runnable_tick> Warning: tick_count exceeded 1,000,000! Reset to 0."
+            )
+        if ncl_update_intervals is not None:
+            if tick_count >= ncl_update_intervals:
+                tick_count = 0
+                print(f"<tm_runnable_tick> tick_count = {tick_count} | Reset to 0.")
+
+                block_3.update_graph()
 
         # BLOQUE 1: MeasuresBlock()
-        time_now = time_manager.format_relative_time(
-            time_manager.get_relative_time(), 5
-        )
-        block_1.time_text.value = time_now
+        if ncl is not None:
+            time_now = time_manager.format_relative_time(
+                time_manager.get_relative_time(), 5
+            )
+            block_2.time_text.value = time_now
 
-        rtime_now = f"{time_manager.get_relative_time():.1f} sec"
-        block_1.r_time_text.value = rtime_now
+            rtime_now = f"{time_manager.get_relative_time():.1f} sec"
+            block_2.r_time_text.value = rtime_now
 
-        start_time = time_now = time_manager.format_relative_time(0, 5)
-        block_1.r_time_since_text.value = f"desde las {start_time}"
+            start_time = time_now = time_manager.format_relative_time(0, 5)
+            block_2.r_time_since_text.value = f"desde las {start_time}"
 
-        # BLOQUE 4: MoreInfoBlock()
-        block_1.time_measure_field.visible = debug_options["show_relative_time_field"]
+        # BLOQUE 2: NCLConfigBlock()
+        block_1.update_calculated_values()
+
+        # BLOQUE 5: MoreInfoBlock()
+        block_2.time_measure_field.visible = debug_options["show_relative_time_field"]
 
         # ACTUALIZACIÓN
         page.run_task(async_update)
@@ -1184,6 +1647,7 @@ def view(page: ft.Page):
         # DEBUG
 
         if debug_options["show_temp_manager_values"]:
+            print(f"tick_count -> {tick_count}")
             print("get_time() -> ", time_manager.get_time())
             print("get_relative_time() -> ", time_manager.get_relative_time())
             print(
