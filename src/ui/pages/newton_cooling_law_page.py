@@ -1065,6 +1065,106 @@ class MeasuresBlock(ft.Container):
 # proyección de temperatura respecto al tiempo al usuario.
 
 
+class GlobalGAVChart(ftc.LineChart):
+    def __init__(self, line_color_1: str):
+        super().__init__(**gav_chart_style)
+
+        self.points: list = []
+
+        self.min_x = None
+        self.max_x = None
+
+        self.line_1 = ftc.LineChartData(
+            color=line_color_1,
+            stroke_width=2,
+            curved=True,
+            rounded_stroke_cap=True,
+            below_line_gradient=ft.LinearGradient(
+                begin=ft.Alignment.TOP_CENTER,
+                end=ft.Alignment.BOTTOM_CENTER,
+                colors=[
+                    ft.Colors.with_opacity(0.25, line_color_1),
+                    "transparent",
+                ],
+            ),
+            points=self.points,
+        )
+
+        self.data_series = [self.line_1]
+
+    def update_axis_limits(self):
+        if self.points:
+            x_values = [point.x for point in self.points]
+            y_values = [point.y for point in self.points]
+
+            self.min_x = min(x_values)
+            self.max_x = max(x_values)
+
+            # Configurar límites del eje X
+            self.bottom_axis.interval = max(1, (self.max_x - self.min_x) // 10)
+
+            # Configurar límites del eje Y
+            max_y = max(y_values)
+            self.left_axis.max = max_y + (max_y * 0.1)  # Añadir 10% de margen
+
+    def load_labels(self):
+        x_labels: list[ftc.ChartAxisLabel] = []
+        y_labels: list[ftc.ChartAxisLabel] = []
+
+        for i in range(0, 100):
+            y_labels.append(
+                ftc.ChartAxisLabel(
+                    value=i,
+                    label=ft.Text(
+                        str(i),
+                        **TEXT_STYLES["gav_chart_label_style"],
+                    ),
+                )
+            )
+
+        for i in range(int(self.min_x), int(self.max_x)):
+            x_labels.append(
+                ftc.ChartAxisLabel(
+                    value=i,
+                    label=ft.Text(
+                        str(i),
+                        **TEXT_STYLES["gav_chart_label_style"],
+                    ),
+                )
+            )
+
+        self.bottom_axis.labels = x_labels
+        self.left_axis.labels = y_labels
+
+    def create_data_point(self, x, y):
+        self.points.append(
+            ftc.LineChartDataPoint(
+                x,
+                y,
+                selected_below_line=ftc.ChartPointLine(
+                    width=0.5, color="white54", dash_pattern=[2, 4]
+                ),
+                selected_point=ftc.ChartCirclePoint(stroke_width=1),
+            ),
+        )
+
+        self.line_1.points = self.points.copy()
+
+        self.update_axis_limits()
+        self.load_labels()
+
+    def set_tpoint_list_to_line(self, point_list: list[TPoint]):
+        # Borrar todo en la línea
+        self.points = []
+        self.line_1.points = []
+
+        # Añadir puntos a la línea
+        for i in range(0, len(point_list)):
+            x = point_list[i].rtime
+            y = point_list[i].temperature
+            self.create_data_point(x, y)
+
+
 class GAVChart(ftc.LineChart):
     def __init__(self, line_color_1: str, line_color_2):
         super().__init__(**gav_chart_style)
@@ -1213,15 +1313,57 @@ class GAVChart(ftc.LineChart):
             self.create_data_point(x, y, line)
 
 
+class GraphAndValuesBlock_GlobalGraph(ft.Container):
+    def __init__(self):
+        super().__init__(**section_block_style)
+        self.expand = 2
+
+        self.graph = GlobalGAVChart(BASE_COLORS["color_3"])
+
+        self.content = ft.Column(
+            controls=[
+                ft.Text(
+                    "Proyección de temperatura en dos horas",
+                    **TEXT_STYLES["title_3_style"],
+                ),
+                ft.Container(
+                    self.graph, expand=True, padding=ft.Padding(10, 30, 30, 10)
+                ),
+            ],
+            expand=True,
+        )
+
+        self.set_placeholder()
+
+    def set_placeholder(self):
+        placeholder_values_1: list[TPoint] = []
+
+        for i in range(0, 30):
+            example_temp_1 = 50 * math.exp(-0.2 * i) + 3 * random.random()
+            placeholder_values_1.append(TPoint(i, example_temp_1))
+
+        self.graph.set_tpoint_list_to_line(placeholder_values_1)
+
+
 class GraphAndValuesBlock_Graph(ft.Container):
     def __init__(self):
         super().__init__(**section_block_style)
-        self.padding = ft.Padding(10, 30, 30, 10)
         self.expand = 3
 
         self.graph = GAVChart(BASE_COLORS["color_3"], BASE_COLORS["color_4"])
 
-        self.content = self.graph
+        self.content = ft.Column(
+            controls=[
+                ft.Text(
+                    "Proyección de temperatura en unos segundos",
+                    **TEXT_STYLES["title_3_style"],
+                ),
+                ft.Container(
+                    self.graph, expand=True, padding=ft.Padding(10, 30, 30, 10)
+                ),
+            ],
+            expand=True,
+        )
 
         self.set_placeholder()
 
@@ -1247,8 +1389,8 @@ class GraphAndValuesBlock_Predicted(ft.Container):
 
         # Temperatura Estimada
         self.predicted_temperature = ft.Text(
-            "35°C",
-            **TEXT_STYLES["big_value_1_style"],
+            "Real: N/D°C\tEuler: N/D°C",
+            **TEXT_STYLES["big_value_4_style"],
         )
 
         predicted_temperature_block = ft.Container(
@@ -1266,7 +1408,7 @@ class GraphAndValuesBlock_Predicted(ft.Container):
 
         # Tasa de Enfriamiento
         self.cooling_rate = ft.Text(
-            "-1.2°C/s",
+            "N/D°C/s",
             **TEXT_STYLES["big_value_1_style"],
         )
 
@@ -1285,7 +1427,7 @@ class GraphAndValuesBlock_Predicted(ft.Container):
 
         # Tiempo hasta enfriamiento
         self.time_left = ft.Text(
-            "1h 23m 45s",
+            "N/D",
             **TEXT_STYLES["big_value_2_style"],
         )
 
@@ -1316,16 +1458,23 @@ class GraphAndValuesBlock(ft.Container):
     def __init__(self):
         super().__init__(**section_block_invisible_style)
 
-        self.content_height = 400
+        self.content_height = 700
         self.height = self.content_height
 
+        self.global_graph = GraphAndValuesBlock_GlobalGraph()
         self.graph_block = GraphAndValuesBlock_Graph()
         self.predicted_block = GraphAndValuesBlock_Predicted()
 
-        self.content = ft.Row(
+        self.content = ft.Column(
             controls=[
-                self.graph_block,
-                self.predicted_block,
+                ft.Row(
+                    controls=[
+                        self.graph_block,
+                        self.predicted_block,
+                    ],
+                    expand=2,
+                ),
+                self.global_graph,
             ],
             height=self.content_height,
             expand=True,
@@ -1351,6 +1500,9 @@ class GraphAndValuesBlock(ft.Container):
                 self.graph_block.graph.set_tpoint_list_to_line(func_array, 1)
                 self.graph_block.graph.set_tpoint_list_to_line(euler_array, 2)
 
+                ## FIJAR VALORES A LOS BLOQUES DE VALORES
+                self.predicted_block.predicted_temperature.value = f"Real: {func_array[10].temperature:.2f}°C\nEuler: {euler_array[10].temperature:.2f}°C"
+
                 # DEBUG
                 if debug_options["show_ncl_returned_func_values"]:
                     print(
@@ -1365,6 +1517,23 @@ class GraphAndValuesBlock(ft.Container):
                     )
                     for i in range(0, len(euler_array)):
                         print(f"index {i}. \t\t {euler_array[i]}")
+
+                # FIJAR RESULTADOS DE LA GRAFICA GLOBAL
+                global updated_global
+                if not updated_global:
+                    updated_global = True
+
+                    global_func_array = ncl.get_global_prediction_with_func()
+                    self.global_graph.graph.set_tpoint_list_to_line(global_func_array)
+
+                    # DEBUG
+                    if debug_options["show_ncl_returned_func_values"]:
+                        print(
+                            "<GraphAndValuesBlock> update_graph() -> RETURNED GLOBAL FUNC ARRAY (AFTER CROPPING)"
+                        )
+                        for i in range(0, len(global_func_array)):
+                            print(f"index {i}. \t\t {global_func_array[i]}")
+
             else:
                 print(
                     "<GraphAndValuesBlock> update_graph() -> could not get array because NCL IS NOT READY"
@@ -1605,10 +1774,13 @@ def view(page: ft.Page):
 
     global tick_count
     tick_count = -1
+    global updated_global
+    updated_global = False
 
     def tm_runnable_tick():
         global tick_count
         global ncl_update_intervals
+
         tick_count += 1
         if tick_count >= 1000000:
             tick_count = 0

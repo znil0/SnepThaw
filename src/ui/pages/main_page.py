@@ -3,6 +3,7 @@
 
 
 import flet as ft
+import asyncio
 # import title_screen
 
 
@@ -26,8 +27,10 @@ def view(page: ft.Page):
                 ft.Divider(color=ft.Colors.WHITE_24),
                 ft.Container(),
                 ft.Text(value="Inicio", color=TEXT_COLOR, size=16),
-                ft.Text(value="Newton", color=TEXT_COLOR, size=16),
-                ft.Text(value="Ecuación de calor", color=TEXT_COLOR, size=16),
+                ft.ElevatedButton(
+                    "Ir a NCL",
+                    on_click=lambda _: asyncio.create_task(page.push_route("/ncl")),
+                ),
             ],
             spacing=20,
         ),

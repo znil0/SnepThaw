@@ -65,6 +65,8 @@ class NewtonCoolingLaw:
             state = False
         elif self.measure_2 is None:
             state = False
+        elif self.r is None:
+            self.calculate_r()
 
         return state
 
@@ -74,11 +76,14 @@ class NewtonCoolingLaw:
         Matemática."""
         amb_temp = self.amb_temp
         time_1 = self.time_manager.get_relative_time(self.measure_1.timestamp)
+        time_2 = self.time_manager.get_relative_time(self.measure_2.timestamp)
         temp_1 = self.measure_1.temperature
         temp_2 = self.measure_2.temperature
 
         # Esta fórmula es exactamente la misma de la Justificación Matemática
-        self.r = (1 / time_1) * m.log((temp_1 - amb_temp) / (temp_2 - amb_temp))
+        self.r = (1 / (time_2 - time_1)) * m.log(
+            (temp_1 - amb_temp) / (temp_2 - amb_temp)
+        )
 
     def add_measure(self, temp_measure: TempMeasure):
         """Método que añade una medición de temperatura, tomando el tiempo
@@ -200,7 +205,6 @@ class NewtonCoolingLaw:
 
         time_now = self.time_manager.get_relative_time()
         start_time = time_now - self.time_manager.interval * before_now
-        # end_time = start_time + self.intervals_ahead * self.time_manager.interval
 
         f = self.create_ncl_function()
         prediction = []
@@ -211,7 +215,7 @@ class NewtonCoolingLaw:
             )
         return prediction
 
-    def get_prediction_with_euler(self, before_now: int, precision_exponent: int = 4):
+    def get_prediction_with_euler(self, before_now: int, precision_exponent: int = 2):
         """Método que retorna un array de `TPoint` usando el
         método de Euler donde before_now es la cantidad de intervalos
         que se dejan de margen entre el primer tiempo y el tiempo que
@@ -236,15 +240,15 @@ class NewtonCoolingLaw:
             tpoint_prediction.append(TPoint(point[0], point[1]))
         return tpoint_prediction
 
-    # MÉTODOS PARA DEBUGGING
-    def print_values(self):
-        print("VALORES CAPTURADOS")
-        print("self.intervals_ahead ->\t", self.intervals_ahead)
-        print("self.amb_temp        ->\t", self.amb_temp)
-        print("self.measure_1       ->\t", self.measure_1)
-        print("self.measure_2       ->\t", self.measure_2)
-        self.time_manager.print_values()
+    def get_global_prediction_with_func(self):
 
-        print("VALORES CALCULADOS")
-        print("self.is_ready()       ->\t", self.is_ready())
-        print("self.r               ->\t", self.r)
+        start_time = self.time_manager.get_relative_time()
+
+        f = self.create_ncl_function()
+        prediction = []
+        for i in range(0, int(1800 / 30)):
+            t = start_time + i * 30
+            prediction.append(
+                TPoint(t, f(t))  # Tiempo Relativo , Temperatura
+            )
+        return prediction

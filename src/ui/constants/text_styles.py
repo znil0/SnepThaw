@@ -135,6 +135,12 @@ TEXT_STYLES: dict = {
         "weight": "w500",
         "color": LIGHT_COLORS["primary"],
     },
+    "big_value_4_style": {
+        "font_family": "Archivo",
+        "size": 16,
+        "weight": "w600",
+        "color": LIGHT_COLORS["primary"],
+    },
     "checkbox_label_style": {
         "font_family": "DM Sans 14pt",
         "size": 14,
