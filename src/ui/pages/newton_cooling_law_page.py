@@ -336,6 +336,7 @@ class NCLConfigBlock(ft.Container):
         # SECCIÓN DE PARAMETROS
 
         self.seconds_ahead_field = ft.TextField(
+            value="60",
             label="seconds_ahead",
             label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
             width=float("inf"),
@@ -345,6 +346,7 @@ class NCLConfigBlock(ft.Container):
         )
 
         self.update_intervals_field = ft.TextField(
+            value="16",
             label="update_intervals",
             label_style=ft.TextStyle(**TEXT_STYLES["measure_text_field_label_style"]),
             width=float("inf"),
@@ -1122,12 +1124,12 @@ class GlobalGAVChart(ftc.LineChart):
                 )
             )
 
-        for i in range(int(self.min_x), int(self.max_x)):
+        for i in range(0, int(3600 / 60)):
             x_labels.append(
                 ftc.ChartAxisLabel(
-                    value=i,
+                    value=i * 60,
                     label=ft.Text(
-                        str(i),
+                        str(i * 60),
                         **TEXT_STYLES["gav_chart_label_style"],
                     ),
                 )
@@ -1487,14 +1489,14 @@ class GraphAndValuesBlock(ft.Container):
                 ## OBTENER ARRAY DE RESULTADOS (CON METODO ANALÍTICO)
                 raw_func_array = ncl.get_prediction_with_function(10)
                 func_array = []
-                for i in range(0, len(raw_func_array) // 8):
-                    func_array.append(raw_func_array[i * 8])
+                for i in range(0, len(raw_func_array) // 16):
+                    func_array.append(raw_func_array[i * 16])
 
                 ## OBTENER ARRAY DE RESULTADOS (CON METODO DE EULER)
                 raw_euler_array = ncl.get_prediction_with_euler(10)
                 euler_array = []
-                for i in range(0, len(raw_euler_array) // 8):
-                    euler_array.append(raw_euler_array[i * 8])
+                for i in range(0, len(raw_euler_array) // 16):
+                    euler_array.append(raw_euler_array[i * 16])
 
                 ## FIJAR ARRAYS A LA GRAFICA
                 self.graph_block.graph.set_tpoint_list_to_line(func_array, 1)
@@ -1503,20 +1505,21 @@ class GraphAndValuesBlock(ft.Container):
                 ## FIJAR VALORES A LOS BLOQUES DE VALORES
                 self.predicted_block.predicted_temperature.value = f"Real: {func_array[10].temperature:.2f}°C\nEuler: {euler_array[10].temperature:.2f}°C"
 
-                # DEBUG
-                if debug_options["show_ncl_returned_func_values"]:
+                # DEBUG: Mostrar arrays en consola
+                if (
+                    debug_options["show_ncl_returned_func_values"]
+                    or debug_options["show_ncl_returned_euler_values"]
+                ):
                     print(
-                        "<GraphAndValuesBlock> update_graph() -> RETURNED FUNC ARRAY (AFTER CROPPING)"
+                        f"<GraphAndValuesBlock> update_graph() -> RETURNED ARRAYS (AFTER CROPPING) ({len(func_array)}, {len(euler_array)})"
                     )
                     for i in range(0, len(func_array)):
-                        print(f"index {i}. \t\t {func_array[i]}")
-
-                if debug_options["show_ncl_returned_euler_values"]:
-                    print(
-                        "<GraphAndValuesBlock> update_graph() -> RETURNED EULER ARRAY (AFTER CROPPING)"
-                    )
-                    for i in range(0, len(euler_array)):
-                        print(f"index {i}. \t\t {euler_array[i]}")
+                        printed = f"index {i}. "
+                        if debug_options["show_ncl_returned_func_values"]:
+                            printed += f"\t\tfunc: {func_array[i].rtime}s\t{func_array[i].temperature:.2f}°C"
+                        if debug_options["show_ncl_returned_euler_values"]:
+                            printed += f"\t\teuler: {euler_array[i].rtime}s\t{euler_array[i].temperature:.2f}°C"
+                        print(printed)
 
                 # FIJAR RESULTADOS DE LA GRAFICA GLOBAL
                 global updated_global
@@ -1526,13 +1529,19 @@ class GraphAndValuesBlock(ft.Container):
                     global_func_array = ncl.get_global_prediction_with_func()
                     self.global_graph.graph.set_tpoint_list_to_line(global_func_array)
 
-                    # DEBUG
-                    if debug_options["show_ncl_returned_func_values"]:
+                    # DEBUG: Mostrar arrays en consola
+                    if (
+                        debug_options["show_ncl_returned_func_values"]
+                        or debug_options["show_ncl_returned_euler_values"]
+                    ):
                         print(
-                            "<GraphAndValuesBlock> update_graph() -> RETURNED GLOBAL FUNC ARRAY (AFTER CROPPING)"
+                            f"<GraphAndValuesBlock> update_graph() -> RETURNED GLOBAL ARRAYS (AFTER CROPPING) ({len(global_func_array)})"
                         )
                         for i in range(0, len(global_func_array)):
-                            print(f"index {i}. \t\t {global_func_array[i]}")
+                            printed = f"index {i}. "
+                            if debug_options["show_ncl_returned_func_values"]:
+                                printed += f"\t\tfunc: {global_func_array[i].rtime}s\t{global_func_array[i].temperature:.2f}°C"
+                            print(printed)
 
             else:
                 print(
@@ -1581,6 +1590,7 @@ class DebugBlock(ft.Container):
                 "Mostrar en la consola el listado de valores calculados del MÉTODO ANALÍTICO",
                 **TEXT_STYLES["checkbox_label_style"],
             ),
+            value=True,
             on_change=self.on_change_show_ncl_returned_func_values,
             **checkbox_style,
         )
@@ -1590,6 +1600,7 @@ class DebugBlock(ft.Container):
                 "Mostrar en la consola el listado de valores calculados del MÉTODO DE EULER",
                 **TEXT_STYLES["checkbox_label_style"],
             ),
+            value=True,
             on_change=self.on_change_show_ncl_returned_euler_values,
             **checkbox_style,
         )
@@ -1657,12 +1668,12 @@ class MoreInfoBlock(ft.Container):
     def __init__(self, page):
         super().__init__(**footer_block_style)
 
-        footer_description = "Aquí va información, UwU"
+        footer_description = "SnepThaw v0.1 (13 de Mayo de 2026))"
 
         self.content = ft.Column(
             controls=[
                 ft.Text(footer_description, **TEXT_STYLES["page_description_style"]),
-                ft.ElevatedButton(
+                ft.Button(
                     "Volver al inicio",
                     on_click=lambda _: asyncio.create_task(page.push_route("/")),
                 ),
@@ -1688,8 +1699,8 @@ def view(page: ft.Page):
     debug_options = {
         "show_relative_time_field": True,
         "show_temp_manager_values": False,
-        "show_ncl_returned_func_values": False,
-        "show_ncl_returned_euler_values": False,
+        "show_ncl_returned_func_values": True,
+        "show_ncl_returned_euler_values": True,
     }
 
     # MÓDULOS DE CÁLCULO _______________________________________________________

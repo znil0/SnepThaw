@@ -174,8 +174,8 @@ class NewtonCoolingLaw:
         """Con base en 2 mediciones de temperatura consecutivas y la temperatura
         ambiente, retorna dos arrays. Donde el primero es un array de tiempos relativos
         que empieza en el tiempo relativo de measure_1 y termina en final_time,
-        y el segundo es un array
-        de temperaturas aproximadas conseguidas mediante el método de Euler."""
+        y el segundo es un array de temperaturas aproximadas conseguidas mediante
+        el método de Euler."""
 
         amb_temp = self.amb_temp
         time_1 = self.time_manager.get_relative_time(self.measure_1.timestamp)
@@ -242,7 +242,7 @@ class NewtonCoolingLaw:
 
     def get_global_prediction_with_func(self):
 
-        start_time = self.time_manager.get_relative_time()
+        start_time = 0
 
         f = self.create_ncl_function()
         prediction = []

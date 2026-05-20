@@ -39,7 +39,7 @@ def view(page: ft.Page):
     # ----------TITLE------------------------
     title_layout = ft.Container(
         content=ft.Text(
-            value="HeatCalico",
+            value="SnepThaw",
             color=TITLE_COLOR,
             size=55,
             weight="bold",
